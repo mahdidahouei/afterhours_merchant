@@ -1,0 +1,247 @@
+/*
+ * Three sizes, because three are used:
+ *   responsive — fills its column (city picker, ticket subject on mobile)
+ *   big        — fixed 532px (ticket subject on desktop)
+ *   square     — 81px dial-code picker, styled to match the outlined text field
+ *
+ * Each size only sets custom properties; the structural rules below read them.
+ */
+
+.responsive {
+  --width: auto;
+  --details-width: 100%;
+  --box-gap: 6px;
+}
+
+.big {
+  --width: 532px;
+  --details-width: 430px;
+  --box-gap: 16px;
+}
+
+.square {
+  --width: 81px;
+  --details-width: 62px;
+  --box-gap: 0px;
+  --padding: 8px;
+  --height: 48px;
+  --radius: 12px;
+  --border: var(--color-field-border);
+  --border-active: var(--color-field-focus);
+}
+
+.container {
+  position: relative;
+  height: var(--height, 52px);
+  min-width: var(--width);
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--box-gap);
+
+  width: 100%;
+  height: 100%;
+  padding-inline: var(--padding, 14px);
+
+  background-color: var(--color-light);
+  border: 1px solid var(--border, var(--color-border));
+  border-radius: var(--radius, var(--radius-xs));
+  cursor: pointer;
+  transition: border 0.3s ease;
+
+  > svg {
+    min-width: 16px;
+  }
+
+  &:hover,
+  &.open {
+    border-color: var(--border-active, var(--color-border-hover));
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--border-active, var(--color-border-hover));
+  }
+
+  &.invalid {
+    border-color: var(--color-danger);
+  }
+
+  .details {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+
+    width: var(--details-width);
+    max-width: var(--details-width);
+    min-width: 0;
+  }
+
+  .selected {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    height: 21px;
+    overflow: hidden;
+    color: var(--color-primary-text);
+  }
+
+  .trailing {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    color: var(--color-primary-text);
+  }
+}
+
+.disabled {
+  pointer-events: none;
+
+  .trigger,
+  .selected,
+  .trailing,
+  svg {
+    color: var(--color-border-hover);
+    cursor: default;
+  }
+}
+
+/* ── Dropdown ───────────────────────────────────────────────────────────── */
+
+.portal {
+  width: var(--width);
+  z-index: 101;
+}
+
+.panel {
+  width: var(--width);
+  min-width: 220px;
+  margin-block: 8px;
+
+  background-color: var(--color-light);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 14px 0 rgb(0 0 0 / 8%);
+  overflow-y: hidden;
+  z-index: 10;
+}
+
+.list {
+  position: relative;
+  max-height: 256px;
+  padding: 4px;
+  overflow-y: auto;
+
+  scrollbar-width: thin;
+  scrollbar-color: rgb(155 155 155 / 50%) transparent;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: rgb(155 155 155 / 50%);
+    border-radius: 16px;
+  }
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  border: none;
+  background-color: transparent;
+  outline: none;
+}
+
+.itemContent {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+
+  color: var(--color-primary-text);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: start;
+
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+
+  &:hover,
+  &.isSelected {
+    background-color: var(--color-skeleton);
+  }
+}
+
+.item[data-highlighted] .itemContent {
+  background-color: var(--color-skeleton);
+}
+
+.empty {
+  padding: 16px;
+  color: var(--color-danger);
+  font-weight: 500;
+}
+
+.errorMessage {
+  margin-top: 4px;
+  color: var(--color-danger);
+  font-size: 10px;
+}
+
+.label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ── In-panel search ────────────────────────────────────────────────────── */
+
+.searchRow {
+  padding: 12px 12px 8px;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 8px 12px;
+  background-color: var(--color-light);
+  border: 1px solid #e8e8e8;
+  border-radius: var(--radius-xs);
+
+  &:focus-within {
+    border-color: var(--color-primary-text);
+  }
+
+  input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--color-primary-text);
+    font-size: 14px;
+    font-weight: 400;
+
+    &::placeholder {
+      color: var(--color-secondary-text);
+    }
+  }
+}

@@ -1,0 +1,144 @@
+.base {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  overflow: hidden;
+
+  height: 52px;
+  padding: 0 4px;
+
+  color: var(--color-dark);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-transform: capitalize;
+  text-decoration: none;
+
+  background-color: transparent;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  @media screen and (min-width: 1800px) {
+    padding: 0 32px;
+  }
+}
+
+/* ── Sizes ──────────────────────────────────────────────────────────────── */
+
+.normal {
+  width: 260px;
+  min-width: 260px;
+  border-radius: var(--radius-2xl);
+}
+
+.small {
+  width: 155px;
+  min-width: 155px;
+  border-radius: var(--radius-lg);
+}
+
+.responsive {
+  width: auto;
+  height: auto;
+
+  &:not(.default) {
+    padding: 16px 28px;
+    border-radius: var(--radius-lg);
+  }
+}
+
+/* ── Variants ───────────────────────────────────────────────────────────── */
+
+.default {
+  padding: 1px;
+  color: var(--color-primary);
+
+  &:disabled {
+    color: var(--color-muted-text);
+    pointer-events: none;
+  }
+}
+
+.primary {
+  background-color: var(--color-primary);
+  color: var(--color-light);
+
+  &:hover {
+    background-color: var(--color-primary-hover);
+  }
+
+  &:disabled {
+    background-color: var(--color-background);
+    color: #cecece;
+    pointer-events: none;
+  }
+}
+
+.secondary {
+  background-color: transparent;
+  border: 1px solid #dfdfdf;
+  color: var(--color-primary-text);
+
+  &:hover {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-light);
+  }
+
+  &:disabled {
+    border-color: var(--color-background);
+    color: #cecece;
+    pointer-events: none;
+  }
+}
+
+.outlineConnect {
+  background-color: transparent;
+  border: 1px solid #dfdfdf;
+  color: var(--color-primary-text);
+
+  &:hover {
+    background-color: #5f413a;
+    border-color: transparent;
+    color: var(--color-light);
+  }
+
+  &:active {
+    background-color: var(--color-primary);
+    border-color: transparent;
+    color: var(--color-light);
+  }
+
+  &:disabled {
+    background-color: transparent;
+    border-color: var(--color-background);
+    color: var(--color-disabled-text);
+    pointer-events: none;
+  }
+}
+
+/* ── Icon-only ──────────────────────────────────────────────────────────── */
+
+.icon {
+  width: auto;
+  height: auto;
+  min-width: 16px;
+  min-height: 16px;
+  max-width: max-content;
+  max-height: max-content;
+  border-radius: var(--radius-lg);
+  transition: none;
+
+  svg {
+    width: inherit;
+    height: inherit;
+  }
+
+  &:disabled svg {
+    color: var(--color-disabled-text);
+  }
+}

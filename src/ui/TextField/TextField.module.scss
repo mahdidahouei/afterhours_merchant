@@ -1,0 +1,176 @@
+/*
+ * Outlined text field with a floating label. Mirrors the mobile app's
+ * AfterhoursTextField.outline() in the light scheme.
+ *
+ * The label float is driven entirely by `:placeholder-shown` — no JS, no focus
+ * state in React. That is why the <input> always carries a placeholder and the
+ * visible label is a sibling element.
+ */
+
+.field {
+  /* 16px inset + 24px icon + 12px gap → text starts at 52px. */
+  --padding-left: 3.25rem;
+
+  position: relative;
+  display: block;
+  width: 260px;
+
+  &.noIcon {
+    --padding-left: 1rem;
+  }
+
+  &.responsive {
+    width: auto;
+
+    .label {
+      width: auto;
+    }
+  }
+
+  input {
+    width: 100%;
+    height: 48px;
+    padding-left: var(--padding-left);
+    padding-top: 0.875rem; /* room for the floated label */
+
+    color: var(--color-field-value);
+    font-size: 16px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    caret-color: var(--color-field-focus);
+
+    border: 1px solid var(--color-field-border);
+    border-radius: 12px;
+
+    &::placeholder {
+      visibility: hidden;
+      opacity: 0;
+    }
+
+    &:focus {
+      border: 2px solid var(--color-field-focus);
+    }
+
+    &:focus-visible {
+      outline: none;
+    }
+  }
+
+  /* Resting: reads as the hint at 16px. Filled or focused: floats to 12px. */
+  .label {
+    position: absolute;
+    left: var(--padding-left);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 170px;
+
+    color: var(--color-field-border);
+    font-size: 16px;
+    font-weight: 500;
+
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+
+    pointer-events: none;
+    transition: all 0.2s ease;
+  }
+
+  .icon {
+    position: absolute;
+    left: 16px;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    /* The prefix icon tracks the border colour through every state. */
+    color: var(--color-field-border);
+    fill: var(--color-field-border);
+    transition: all 0.2s ease;
+
+    svg {
+      width: 24px;
+      height: 24px;
+      max-width: 24px;
+      max-height: 24px;
+    }
+  }
+
+  .trailing {
+    position: absolute;
+    right: 16px;
+    top: 0;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    color: var(--color-field-border);
+    fill: var(--color-field-border);
+
+    svg {
+      max-width: 16px;
+      max-height: 16px;
+    }
+  }
+
+  input:not(:placeholder-shown) ~ .label,
+  input:focus ~ .label {
+    top: 7px;
+    transform: translateY(0);
+    font-size: 12px;
+  }
+
+  input:focus ~ .label {
+    color: var(--color-field-focus);
+  }
+
+  input:focus ~ .icon {
+    color: var(--color-field-focus);
+    fill: var(--color-field-focus);
+  }
+
+  &:hover input:not(:focus):not(.invalid) {
+    border-color: var(--color-field-focus);
+  }
+
+  input.invalid {
+    border: 2px solid var(--color-field-error);
+
+    ~ .label {
+      color: var(--color-field-error);
+    }
+
+    ~ .icon {
+      color: var(--color-field-error);
+      fill: var(--color-field-error);
+    }
+  }
+
+  &.disabled {
+    pointer-events: none;
+
+    input {
+      border-color: var(--color-field-disabled);
+    }
+
+    input,
+    .label,
+    .icon {
+      color: var(--color-field-disabled);
+      fill: var(--color-field-disabled);
+    }
+  }
+}
+
+.error {
+  margin-top: 4px;
+  padding-left: 16px;
+  color: var(--color-field-error);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+}

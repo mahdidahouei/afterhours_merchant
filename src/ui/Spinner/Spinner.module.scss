@@ -1,0 +1,44 @@
+.spinner {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  margin: 100px auto;
+  aspect-ratio: 1 / 1;
+
+  &.small {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+  }
+
+  .bounce {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-circle);
+    opacity: 0.6;
+    animation: bounce 1.5s infinite ease-in-out;
+  }
+
+  .bounceLead {
+    background-color: var(--color-primary-text);
+    animation-delay: -0.75s;
+  }
+
+  .bounceTrail {
+    background-color: var(--color-muted-text);
+  }
+
+  &.light .bounce {
+    background-color: var(--color-secondary);
+  }
+}
+
+@keyframes bounce {
+  0%,
+  100% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1);
+  }
+}

@@ -1,0 +1,68 @@
+/*
+ * Design tokens — the single source of truth for the whole app.
+ *
+ * Tailwind reads these through `var(--…)` (see tailwind.config.ts) and the
+ * handful of CSS Modules read them directly. Nothing else may hard-code a
+ * brand colour or radius. If a value belongs in more than one place, it
+ * belongs here.
+ *
+ * The old project declared this palette twice — once in tailwind.config.js and
+ * once in _variables.scss — and the two had already drifted apart. Keeping one
+ * declaration is the whole point of this file.
+ */
+
+:root {
+  /* ── Brand ────────────────────────────────────────────────────────────── */
+  --color-primary: #321b15;
+  --color-primary-hover: #4a2a1e;
+  --color-secondary: #ede5d8;
+  --color-secondary-hover: #f5f0e8;
+
+  --color-light: #ffffff;
+  --color-dark: #000000;
+
+  /* ── Text ─────────────────────────────────────────────────────────────── */
+  --color-primary-text: #262626;
+  --color-secondary-text: #7d7d7d;
+  --color-muted-text: #595959;
+  --color-disabled-text: #bfbfbf;
+
+  /* ── Surfaces ─────────────────────────────────────────────────────────── */
+  --color-background: #f2f2f2;
+  --color-background-2: #e5e5e5;
+  --color-background-3: #f9f9f9;
+  --color-page: #f5f5f5;
+  --color-neutral: #fafafa;
+  --color-skeleton: #f6f6f6;
+
+  --color-border: #e5e5e5;
+  --color-border-hover: #bfbfbf;
+
+  /* ── Status ───────────────────────────────────────────────────────────── */
+  --color-danger: #bf1010;
+  --color-success: #24974b;
+
+  /* ── Text fields ──────────────────────────────────────────────────────── */
+  /* Mirrors the mobile app's outlined text field (light scheme). */
+  --color-field-border: #6b6357;
+  --color-field-focus: #8a6535;
+  --color-field-error: #711007;
+  --color-field-value: #262626;
+  --color-field-disabled: #cfcfcf;
+
+  /* ── Radii ────────────────────────────────────────────────────────────── */
+  --radius-xs: 10px;
+  --radius-sm: 14px;
+  --radius-md: 18px;
+  --radius-lg: 26px;
+  --radius-2xl: 36px;
+  --radius-circle: 9999px;
+
+  /* ── Type ─────────────────────────────────────────────────────────────── */
+  --font-satoshi: "Satoshi", sans-serif;
+  --font-lora: "Lora", serif;
+
+  /* ── Elevation ────────────────────────────────────────────────────────── */
+  /* The soft double shadow every landing card shares. */
+  --shadow-card: 0 0 2px 0 rgb(0 0 0 / 15%), 0 1px 8px 0 rgb(0 0 0 / 15%);
+}

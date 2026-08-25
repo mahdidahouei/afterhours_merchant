@@ -1,0 +1,123 @@
+@import "./tokens.css";
+@import "./fonts.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    /* Landing sections are anchored by IntersectionObserver, not hash links,
+       but a smooth scroll still reads better on the FAQ expand. */
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
+  /*
+   * Base type scale.
+   *
+   * body deliberately keeps the browser's 16px: unstyled containers inherit it,
+   * and their line-height is what sets the height of every pill, tag and inline
+   * row that doesn't declare its own. Paragraphs, links and buttons step down to
+   * 14px. Components override all of this freely — this is only the floor.
+   */
+  body {
+    min-height: 100vh;
+    margin-inline: auto;
+    overflow-x: hidden;
+    background-color: var(--color-page);
+    color: var(--color-primary-text);
+    font-family: var(--font-satoshi);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  /* Base body copy. Components that care set their own size; this is what
+     unstyled prose (the legal documents) renders at. */
+  p {
+    font-size: 14px;
+    font-weight: 400;
+  }
+
+  a,
+  button {
+    position: relative;
+    padding: 0 4px;
+    border: 0;
+    border-radius: var(--radius-md);
+    outline: none;
+    color: inherit;
+    font-family: inherit;
+    font-size: 14px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+  }
+
+  button {
+    background: none;
+  }
+
+  :focus {
+    outline: none;
+  }
+
+  /* Keyboard users still get a ring; pointer users don't. */
+  :focus-visible {
+    outline: 2px solid var(--color-field-focus);
+    outline-offset: 2px;
+  }
+
+  /* Chrome paints autofilled fields blue; force them back to the page. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px var(--color-light) inset !important;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+@layer components {
+  /* Thin scrollbar used by the long scrollable lists (restaurants, options). */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(155 155 155 / 50%) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(155 155 155 / 50%);
+    border-radius: 16px;
+  }
+}

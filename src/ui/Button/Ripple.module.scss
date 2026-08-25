@@ -1,0 +1,20 @@
+.host {
+  position: absolute;
+  inset: 0;
+}
+
+.wave {
+  position: absolute;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  opacity: 1;
+  transform: scale(0);
+  animation: ripple 1000ms;
+}
+
+@keyframes ripple {
+  to {
+    opacity: 0;
+    transform: scale(2);
+  }
+}
