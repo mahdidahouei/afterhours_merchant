@@ -18,6 +18,13 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+env:
+  # The custom domain this site is served from. Because it is a domain root
+  # rather than a /<repo>/ subpath, the app builds with base "/" — see the
+  # Build step. Clear this and the BASE_PATH override together if you ever go
+  # back to <user>.github.io/<repo>/.
+  CUSTOM_DOMAIN: afterhours-merchant.mahdidahouei.com
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -40,9 +47,9 @@ jobs:
 
       - name: Build
         env:
-          # A project site is served from /<repo>/, so every asset URL needs the
-          # prefix. `base` in vite.config.ts reads this.
-          BASE_PATH: /${{ github.event.repository.name }}/
+          # Served from the root of a custom domain, so no path prefix. (On a
+          # bare github.io project site this would be /<repo>/ instead.)
+          BASE_PATH: /
           # Pages is a preview of the UI, and the owner API is not live yet —
           # without the mock every screen past the search box would be an error
           # state. This also enables the "Screens" jump-to panel, which is what
@@ -51,6 +58,12 @@ jobs:
           # Set this to false once the real API ships.
           VITE_USE_MOCK: "true"
         run: npm run build
+
+      - name: Set custom domain
+        # Pages reads CNAME from the published artifact. Without it, deploying
+        # from Actions can clear the custom domain configured in Settings and
+        # drop the site back to <user>.github.io.
+        run: echo "$CUSTOM_DOMAIN" > dist/CNAME
 
       - name: Add SPA fallback
         # Pages has no rewrite rules: a deep link like /claim is a 404 at the

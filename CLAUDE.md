@@ -148,8 +148,11 @@ the wrong backend after a redeploy).
 
 ## Deploy targets
 
-The app ships to two places and must keep working in both: an nginx container at
-`/`, and GitHub Pages at `/<repo>/`.
+The app ships to two places and must keep working in both: an nginx container,
+and GitHub Pages at https://afterhours-merchant.mahdidahouei.com. Both currently
+serve from a domain root, so `BASE_PATH` is `/` for each — but the subpath case
+is still supported and must not regress, because a bare github.io project site
+would need it.
 
 `base` in `vite.config.ts` comes from `BASE_PATH`. Anything that references a
 `public/` file at runtime must go through `assetUrl()` or be a root-absolute

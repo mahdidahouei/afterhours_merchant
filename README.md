@@ -97,10 +97,19 @@ at the domain root and under a subpath without a second build config.
 
 ### GitHub Pages
 
+Live at **https://afterhours-merchant.mahdidahouei.com**
+
 `.github/workflows/deploy.yml` builds and publishes on every push to `main`.
-It sets `BASE_PATH=/<repo>/` because a project site is served from a subpath,
-copies `index.html` to `404.html` (Pages has no rewrite rules, so that is how a
-deep link reaches the router), and drops a `.nojekyll`.
+Because the site is served from the root of a custom domain, it builds with
+`BASE_PATH=/`. It also writes `dist/CNAME` (Pages reads the custom domain from
+the published artifact — without it, deploying from Actions can clear the
+domain set in Settings), copies `index.html` to `404.html` (Pages has no rewrite
+rules, so that is how a deep link reaches the router), and drops a `.nojekyll`.
+
+Moving back to a bare `<user>.github.io/<repo>/` site means dropping the CNAME
+step and setting `BASE_PATH` to `/${{ github.event.repository.name }}/`. Nothing
+in the app changes — every asset URL already resolves against
+`import.meta.env.BASE_URL`.
 
 The Pages build sets `VITE_USE_MOCK=true`: the owner API is not live yet, so
 without it every screen past the search box would be an error state. It also
