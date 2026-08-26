@@ -146,6 +146,20 @@ Runtime caching rules live in `vite.config.ts`. Two must not change: **`.mp4` is
 ~26 MB) and **`config.js` is `NetworkOnly`** (a cached copy points the app at
 the wrong backend after a redeploy).
 
+## Deploy targets
+
+The app ships to two places and must keep working in both: an nginx container at
+`/`, and GitHub Pages at `/<repo>/`.
+
+`base` in `vite.config.ts` comes from `BASE_PATH`. Anything that references a
+`public/` file at runtime must go through `assetUrl()` or be a root-absolute
+path in `index.html` (Vite rewrites those). A hard-coded `"/media/..."` in TS
+will 404 on Pages.
+
+The service worker's `runtimeCaching` patterns match on a path *segment*
+(`includes("/fonts/")`), never on the string start — a root-anchored pattern
+silently stops matching under a base.
+
 ## Runtime configuration
 
 `public/config.js` assigns `window.__ENV__` before the bundle parses. In

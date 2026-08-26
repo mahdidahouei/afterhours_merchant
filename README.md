@@ -91,7 +91,25 @@ falls back to `VITE_API_BASE_URL` from the `.env` files.
 
 ## Deployment
 
-`docker build` produces an nginx image serving `dist/`. `nginx.conf` sets the
+Two targets, one codebase. Everything that references an asset by URL goes
+through `import.meta.env.BASE_URL` (see `src/lib/assetUrl.ts`), so the app works
+at the domain root and under a subpath without a second build config.
+
+### GitHub Pages
+
+`.github/workflows/deploy.yml` builds and publishes on every push to `main`.
+It sets `BASE_PATH=/<repo>/` because a project site is served from a subpath,
+copies `index.html` to `404.html` (Pages has no rewrite rules, so that is how a
+deep link reaches the router), and drops a `.nojekyll`.
+
+The Pages build sets `VITE_USE_MOCK=true`: the owner API is not live yet, so
+without it every screen past the search box would be an error state. It also
+turns on the "Screens" jump-to panel, which is what makes the deploy browsable.
+Set it to `false` once the API ships.
+
+### Container
+
+`docker build` produces an nginx image serving `dist/` at the domain root. `nginx.conf` sets the
 cache headers that matter: content-hashed `/assets/` immutable for a year,
 `config.js` and `sw.js` never cached, HTML always revalidated.
 

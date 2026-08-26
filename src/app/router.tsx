@@ -60,4 +60,6 @@ export const router = createBrowserRouter([
       { path: "*", element: <NotFoundPage /> },
     ],
   },
-]);
+  // BASE_URL is "/" for the container and "/afterhours_merchant/" on Pages;
+  // the router has to know, or every link points outside the deployment.
+], { basename: import.meta.env.BASE_URL });

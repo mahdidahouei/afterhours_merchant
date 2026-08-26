@@ -7,7 +7,19 @@ import path from "node:path";
 const ONE_YEAR = 60 * 60 * 24 * 365;
 const ONE_WEEK = 60 * 60 * 24 * 7;
 
+/**
+ * Where the app will be served from.
+ *
+ * "/" for the nginx container. GitHub Pages serves a project site from a
+ * subpath, so the workflow sets BASE_PATH="/afterhours_merchant/". Every
+ * absolute asset reference in the app goes through `import.meta.env.BASE_URL`
+ * so both work from one codebase.
+ */
+const base = process.env.BASE_PATH ?? "/";
+
 export default defineConfig({
+  base,
+
   resolve: {
     alias: { "@": path.resolve(import.meta.dirname, "src") },
   },
@@ -54,8 +66,8 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg}"],
         globIgnores: ["**/node_modules/**", "media/**"],
 
-        navigateFallback: "index.html",
-        navigateFallbackDenylist: [/^\/config\.js$/],
+        navigateFallback: `${base}index.html`,
+        navigateFallbackDenylist: [/config\.js$/],
 
         cleanupOutdatedCaches: true,
         clientsClaim: true,
@@ -64,10 +76,13 @@ export default defineConfig({
         // 26 MB of hero video must never be pulled into the precache manifest.
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
 
+        // These match on a path *segment* rather than the string start: under a
+        // base like /afterhours_merchant/ every asset URL is prefixed, and
+        // root-anchored patterns would quietly never match.
         runtimeCaching: [
           {
             // Self-hosted Satoshi / Lora. Immutable in practice.
-            urlPattern: ({ url }) => url.pathname.startsWith("/fonts/"),
+            urlPattern: ({ url }) => url.pathname.includes("/fonts/"),
             handler: "CacheFirst",
             options: {
               cacheName: "afterhours-fonts",
@@ -77,7 +92,7 @@ export default defineConfig({
           },
           {
             // Hero poster frames (.webp). Small, and they gate first paint.
-            urlPattern: ({ url }) => /^\/media\/.*\.webp$/.test(url.pathname),
+            urlPattern: ({ url }) => /\/media\/.*\.webp$/.test(url.pathname),
             handler: "CacheFirst",
             options: {
               cacheName: "afterhours-posters",
@@ -88,7 +103,7 @@ export default defineConfig({
           {
             // Bundled images that Vite emitted with a content hash.
             urlPattern: ({ url }) =>
-              /^\/assets\/.*\.(png|webp|jpe?g|gif|avif)$/.test(url.pathname),
+              /\/assets\/.*\.(png|webp|jpe?g|gif|avif)$/.test(url.pathname),
             handler: "CacheFirst",
             options: {
               cacheName: "afterhours-images",
@@ -98,7 +113,7 @@ export default defineConfig({
           },
           {
             // Legal markdown is fetched at runtime; serve instantly, refresh behind.
-            urlPattern: ({ url }) => url.pathname.startsWith("/legal/"),
+            urlPattern: ({ url }) => url.pathname.includes("/legal/"),
             handler: "StaleWhileRevalidate",
             options: {
               cacheName: "afterhours-legal",
@@ -130,7 +145,7 @@ export default defineConfig({
           {
             // Runtime API config is regenerated per environment on container
             // start. A cached copy would point the app at the wrong backend.
-            urlPattern: ({ url }) => url.pathname === "/config.js",
+            urlPattern: ({ url }) => url.pathname.endsWith("/config.js"),
             handler: "NetworkOnly",
           },
         ],
@@ -143,15 +158,15 @@ export default defineConfig({
         short_name: "Afterhours",
         description:
           "Receive reservations from Gen Z & Millennial diners, without lifting a finger.",
-        start_url: "/",
-        scope: "/",
+        start_url: base,
+        scope: base,
         display: "standalone",
         theme_color: "#321B15",
         background_color: "#ffffff",
         icons: [
-          { src: "/app-icon.svg", sizes: "any", type: "image/svg+xml" },
+          { src: `${base}app-icon.svg`, sizes: "any", type: "image/svg+xml" },
           {
-            src: "/app-icon.svg",
+            src: `${base}app-icon.svg`,
             sizes: "1024x1024",
             type: "image/svg+xml",
             purpose: "maskable",

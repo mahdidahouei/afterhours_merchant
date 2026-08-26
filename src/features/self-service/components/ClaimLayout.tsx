@@ -22,7 +22,12 @@ type Props = {
  */
 export function ClaimLayout({ activeIndex, stageLabel, headerAside, children }: Props) {
   return (
-    <div className="min-h-screen bg-color-background-3">
+    // `[&_button]:normal-case` undoes the Button primitive's inherited
+    // `text-transform: capitalize`. The brand guide is explicit that everything
+    // — buttons, headings, nav — is sentence case, and "Submit For Review"
+    // reads as corporate. Scoped to this feature so the landing and connect
+    // pages keep rendering exactly as they always have.
+    <div className="min-h-screen bg-color-background-3 [&_button]:normal-case">
       <ProgressLine activeIndex={activeIndex} />
 
       <header className="sticky top-0 z-[100] flex h-[60px] items-center justify-between border-b border-color-border bg-white/95 px-5 backdrop-blur-sm tb:px-7">

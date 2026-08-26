@@ -1,3 +1,4 @@
+import { assetUrl } from "@/lib/assetUrl";
 import tag01 from "@/assets/landing/hero/tags/tag-01.svg";
 import tag02 from "@/assets/landing/hero/tags/tag-02.svg";
 import tag03 from "@/assets/landing/hero/tags/tag-03.svg";
@@ -18,8 +19,8 @@ export type HeroVideo = {
 };
 
 const clip = (n: string, tag: string, icon: string): HeroVideo => ({
-  src: `/media/hero/${n}.mp4`,
-  poster: `/media/hero/${n}.webp`,
+  src: assetUrl(`media/hero/${n}.mp4`),
+  poster: assetUrl(`media/hero/${n}.webp`),
   tag,
   icon,
 });

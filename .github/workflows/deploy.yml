@@ -1,0 +1,80 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Lets you re-deploy from the Actions tab without pushing.
+  workflow_dispatch:
+
+# GITHUB_TOKEN needs these to publish a Pages artifact.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race. In-progress runs finish rather than being
+# cancelled, so a half-uploaded artifact can't become the live site.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        env:
+          # A project site is served from /<repo>/, so every asset URL needs the
+          # prefix. `base` in vite.config.ts reads this.
+          BASE_PATH: /${{ github.event.repository.name }}/
+          # Pages is a preview of the UI, and the owner API is not live yet —
+          # without the mock every screen past the search box would be an error
+          # state. This also enables the "Screens" jump-to panel, which is what
+          # makes the deploy browsable.
+          #
+          # Set this to false once the real API ships.
+          VITE_USE_MOCK: "true"
+        run: npm run build
+
+      - name: Add SPA fallback
+        # Pages has no rewrite rules: a deep link like /claim is a 404 at the
+        # CDN before the app ever loads. Serving index.html as the 404 page
+        # hands those URLs to the router instead.
+        run: cp dist/index.html dist/404.html
+
+      - name: Disable Jekyll
+        # Without this, Pages' Jekyll step strips files and folders whose names
+        # begin with an underscore.
+        run: touch dist/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

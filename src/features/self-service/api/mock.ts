@@ -204,6 +204,53 @@ export function setMockScanFailure(shouldFail: boolean) {
   scanShouldFail = shouldFail;
 }
 
+/**
+ * Drop the mock straight into a given status, for looking at a screen without
+ * walking the eight steps that normally lead to it.
+ *
+ * Only reachable from the dev-only stage switcher, and only when the mock is
+ * the active implementation.
+ */
+export function seedMockClaim(status: ClaimStatus, options?: { reviewNote?: string }) {
+  claim = makeClaim("pl_oli_mazi");
+  claim.status = status;
+
+  // A profile exists from `drafted` onward — before that the contract says null.
+  const hasProfile = ["drafted", "submitted", "approved", "live"].includes(status);
+  claim.profile = hasProfile ? structuredClone(SCANNED_PROFILE) : null;
+
+  claim.scanError =
+    status === "scan_failed"
+      ? "The site didn't respond. It may be down, or blocking automated visitors."
+      : null;
+
+  claim.reviewNote = options?.reviewNote ?? null;
+
+  // Submitted and later have been through photos, so give them something to show.
+  claim.photos = ["submitted", "approved", "live"].includes(status)
+    ? SEEDED_PHOTOS.map((photo, index) => ({ ...photo, position: index }))
+    : [];
+
+  scanStartedAt = Date.now();
+  writeToken(id("tok"), iso(24 * 60 * 60 * 1000));
+}
+
+/** Solid-colour placeholders, so seeded screens have photos without any fetch. */
+const SEEDED_PHOTOS: Photo[] = ["#8A6535", "#321B15", "#6B6357", "#B09050"].map(
+  (colour, index) => ({
+    photoId: `pho_seed_${index}`,
+    position: index,
+    url:
+      "data:image/svg+xml;utf8," +
+      encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><rect width="800" height="1000" fill="${colour}"/></svg>`,
+      ),
+    width: 800,
+    height: 1000,
+    uploadedAt: new Date(0).toISOString(),
+  }),
+);
+
 const emptyProfile = (): Profile => ({
   tagline: null,
   description: null,

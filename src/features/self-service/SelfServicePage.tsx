@@ -4,7 +4,7 @@ import { isProblem } from "@/lib/errors";
 import { ErrorState } from "@/ui/ErrorState";
 import { Spinner } from "@/ui/Spinner";
 import { Toast } from "@/ui/Toast";
-import { ownerApi } from "./api";
+import { isMockApi, ownerApi } from "./api";
 import { claimKeys, useClaim } from "./api/queries";
 import type {
   ClaimStatus,
@@ -15,6 +15,7 @@ import type {
 } from "./api/types";
 import { EMPTY_PENDING_API } from "./api/types";
 import { ClaimLayout } from "./components/ClaimLayout";
+import { DevStageSwitcher } from "./components/DevStageSwitcher";
 import type { Language } from "./stages/Review/MenusSection";
 import { clearToken, readToken, writeToken } from "./session/tokenStore";
 import {
@@ -73,6 +74,24 @@ export default function SelfServicePage() {
   const [hasToken, setHasToken] = useState(() => Boolean(readToken()));
   const claim = useClaim();
 
+  /** Dev-only: seed the mock into a status and render that screen. */
+  const jumpToScreen = useCallback(
+    (step: DraftedStep | undefined, seeded: boolean) => {
+      if (step) setDraftedStep(step);
+      if (!seeded) {
+        setCandidate(null);
+        setVerification(null);
+        setAnonStage("search");
+      }
+      setHasToken(seeded);
+      void claim.refetch();
+    },
+    // `claim` is a stable query object; depending on it would rebuild this
+    // callback on every poll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   /* A dead token drops us back to verification with the work intact. */
   useEffect(() => {
     if (isProblem(claim.error, "session_expired")) {
@@ -118,6 +137,8 @@ export default function SelfServicePage() {
 
   return (
     <ClaimLayout activeIndex={activeIndex} stageLabel={STAGE_LABEL[stage]}>
+      {isMockApi && <DevStageSwitcher onJump={jumpToScreen} />}
+
       <Toast
         isOpen={milestone.isOpen}
         title={milestone.content?.title ?? ""}

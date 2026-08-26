@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Markdown from "react-markdown";
+import { assetUrl } from "@/lib/assetUrl";
 import { ErrorState } from "@/ui/ErrorState";
 import Logo from "@/assets/brand/logo-mark.svg?react";
 import styles from "./LegalPage.module.scss";
@@ -10,11 +11,11 @@ export type LegalDocument = "terms" | "privacy";
 const DOCUMENTS = {
   terms: {
     heading: "Afterhours Terms and Conditions",
-    file: "/legal/terms-and-conditions.md",
+    file: "legal/terms-and-conditions.md",
   },
   privacy: {
     heading: "Afterhours Privacy Policy",
-    file: "/legal/privacy-policy.md",
+    file: "legal/privacy-policy.md",
   },
 } as const;
 
@@ -33,7 +34,7 @@ export default function LegalPage({ document: kind }: { document: LegalDocument 
     setContent(null);
     setHasFailed(false);
 
-    fetch(file, { signal: controller.signal })
+    fetch(assetUrl(file), { signal: controller.signal })
       .then((response) => {
         // Without this check a 404 resolves happily and the server's HTML error
         // page gets rendered as if it were the legal text.
