@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ArrowLeft } from "iconsax-reactjs";
-import { errorMessage, isProblem } from "@/lib/errors";
+import { errorMessage, isProblem, ProblemError } from "@/lib/errors";
 import { Button } from "@/ui/Button";
 import {
   useConnectReservation,
@@ -96,7 +96,7 @@ export function BookingsStage({ claim, onBack }: Props) {
           {submit.isError && (
             <p role="alert" className="mt-4 font-satoshi text-[13px] text-color-danger">
               {isProblem(submit.error, "profile_incomplete")
-                ? "A few things are still missing — go back and check the highlighted sections."
+                ? incompleteMessage(submit.error)
                 : errorMessage(submit.error)}
             </p>
           )}
@@ -139,4 +139,48 @@ export function BookingsStage({ claim, onBack }: Props) {
       )}
     </StagePanel>
   );
+}
+
+/** Which step the owner has to go back to, in their words. */
+const FIELD_LABELS: Record<string, string> = {
+  photos: "a photo",
+  tagline: "your tagline",
+  description: "your description",
+  cuisines: "your cuisines",
+  menus: "a menu",
+  email: "a contact email",
+};
+
+/**
+ * Name what's missing instead of pointing vaguely backwards.
+ *
+ * Submit is the end of a six-step flow, so "something is missing" leaves the
+ * owner to re-open three screens to find out what. `profile_incomplete` carries
+ * `missingFields`; this turns those paths into the sentence they'd say
+ * themselves, and names the step to go back to.
+ */
+function incompleteMessage(error: unknown): string {
+  const missing =
+    error instanceof ProblemError && error.missingFields?.length
+      ? error.missingFields
+      : [];
+
+  if (missing.length === 0) {
+    return "A few things are still missing — go back and check your profile and photos.";
+  }
+
+  const labels = missing.map((path) => FIELD_LABELS[path.split(".")[0]] ?? path);
+  const unique = [...new Set(labels)];
+  const list =
+    unique.length === 1
+      ? unique[0]
+      : `${unique.slice(0, -1).join(", ")} and ${unique[unique.length - 1]}`;
+
+  const step = missing.some((path) => path.startsWith("photos"))
+    ? unique.length === 1
+      ? "Add your photos"
+      : "Build your profile and Add your photos"
+    : "Build your profile";
+
+  return `We still need ${list}. Go back to ${step}.`;
 }
