@@ -1,16 +1,23 @@
 # Owner Self-Service — design
 
-Status: approved 2026-08-24
-Contract: "Owner Self-Service — API contract" (15 endpoints, `/api/v1/owner`)
-Designs: `../self-service/Owner Self-Service - Gamified.dc.html`
+Status: approved 2026-08-24 · revised 2026-08-29 against the real swagger
+Contract: `swagger/docs.json`, tags `owner-self-service` and
+`Reservation Platform` (23 endpoints, `/api/v1/owner`)
+Designs: `../self-service/Owner Self-Service - Connect.dc.html` — the Connect
+variant supersedes the Gamified one; it is the same flow with step 6 attached.
 
 ## What it is
 
 A restaurant owner finds their listing, proves ownership by SMS, corrects the
 listing facts, lets us read their website to draft a profile, reviews and edits
-that profile, adds photos, and submits it for review.
+that profile, adds photos, connects their booking system, and submits it for
+review.
 
-Eight screens, driven by seven claim statuses.
+Nine screens over six user-facing steps, driven by seven claim statuses.
+
+Step 6 is the old `/connect` widget folded in. Once this ships, `/connect` is
+retired: the same job is done here, with the claim's own token instead of a
+restaurant id chosen from a dropdown.
 
 ## The state machine
 
@@ -27,16 +34,36 @@ Phase B — token         status decides, and nothing else
 | 0 Find, 1 Verify ownership, 2 OTP | Phase A local state |
 | 3 Check your details | `verified`, and `scan_failed` (same screen + `scanError`) |
 | 4 Reading your website | `scanning` — poll `GET /claim` every 2s |
-| 5 Review, 6 Photos | both `drafted`, split by a local sub-step |
-| 7 Saved | `live` |
+| 5 Review, 6 Photos, 7 Connect bookings | all three `drafted`, split by a local sub-step |
+| 8 Saved | `live` |
 
 The contract's status table requires two screens the design does not draw:
 `submitted` ("With our team") and `approved` ("Almost there"). Both are built in
 the same visual language as stage 7.
 
-Resume is not a separate call: a stored token means `GET /session` then
-`GET /claim`, then render from status. `401 session_expired` drops the token and
-returns to verification — the claim survives.
+### Resume
+
+A stored token means `GET /claim`, then render from status. `401
+session_expired` drops the token and returns to verification — the claim
+survives, and re-verifying the same number picks it back up.
+
+Status alone is not enough to land on the right screen. `drafted` covers three
+of them, and the contract has no field naming which. Two sources are combined:
+
+1. **Derived from the claim.** `reservation.length > 0` means they reached
+   bookings; `photos.length > 0` means they reached photos; otherwise build.
+   This is authoritative and survives a new device.
+2. **A note in localStorage**, keyed by `claimId`, of the furthest step this
+   browser reached. It covers the one case the derivation cannot see — opening
+   a step and leaving without doing anything on it — and is allowed to be lost.
+
+Whichever is further along wins, so a resume never moves backwards. The seed
+runs once per claim, not per render: re-deriving continuously would move the
+owner forward the moment a photo finished uploading.
+
+**Ask the backend for a `currentStep` on `Claim`** and both halves collapse into
+reading a field. Until then, `session/progressStore.ts` is the whole workaround
+and is documented as disposable.
 
 ## Auth boundary
 
@@ -78,20 +105,49 @@ socials, email and reservations are profile → `PUT /claim/profile`. Phone and
 address are listing facts → `PATCH /claim/place`. There is exactly one phone
 field in the whole API and it lives on `Place`.
 
+## Step 6 — connect bookings
+
+`GET /reservation-platforms` lists what we integrate with;
+`GET /reservation-platforms/{id}/guide` returns that platform's own walkthrough.
+The guide's length and content belong to the platform, so the UI walks
+`steps[]` and relies on exactly one thing: a step carrying `need` asks for a
+credential, a step without one is instruction. `need.field` picks between
+`integrationId` and `apiKey` on `POST /claim/reservation`.
+
+The picker sorts platforms the scan already found on the website
+(`profile.reservationPlatforms`) to the top — the scan did that work, and
+making the owner hunt through nine alphabetical rows would waste it.
+
+Connecting is optional. "Connect" and "I'll connect later" both end with
+`POST /claim/submit`; a restaurant with no integration is still a complete
+listing.
+
+## Contract corrections
+
+Six things the hand-written contract note got wrong, found by reading the
+swagger:
+
+| Assumed | Actually |
+| --- | --- |
+| `PlaceCandidate.claimability` | Not returned. `GET /places` gives four fields; an already-claimed place surfaces as `place_already_claimed` at verification. |
+| `POST /verifications` takes a phone | Takes `placeId` only. The "different number" option cannot exist — `POST /claim-tickets` is the escape hatch instead. |
+| `PATCH /claim/place` takes `address` | It does not. Name, phone, websiteUri, neighbourhood only; nullable ones as `{set, value}`. |
+| IG/TikTok are not in v1 | `POST /claim/social/{provider}/connect` is real OAuth. |
+| Bookings are not in the claim | `POST /claim/reservation` and `Claim.reservation[]`. |
+| `Photo` has width/height/uploadedAt | `photoId`, `position`, `url`. |
+
 ## Controls with no endpoint yet
 
-The design draws six controls the contract has no field for. They are built and
-marked, not dropped:
+Two remain, isolated behind `PENDING_API` in the feature's types. They hold
+local state and are visibly local; nothing silently discards.
 
-- menu file language (NL/EN/DE/FR)
-- Instagram / TikTok feed connection
-- scan activity feed and progress percentage
-- establishment type as a chip row (contract: one value)
-- primary-platform star
-- rating / review count on search result cards (contract: search is thin)
+- menu file language (NL/EN/DE/FR) — `ClaimMenuFile` is title/link/type
+- primary-platform star — `reservationPlatforms` is a flat list of strings
 
-Each is isolated behind `PENDING_API` in the feature's types with a one-line
-note. They hold local state and are visibly local; nothing silently discards.
+Four have since landed or been resolved: IG/TikTok connection is real OAuth,
+the scan progress is cosmetic and stays so, establishment type is rendered as
+the single value the contract defines, and search result cards carry no rating
+because `GET /places` returns none.
 
 ## Backend flag
 
@@ -104,15 +160,18 @@ Default off; `.env.development` turns it on.
 
 ```
 src/features/self-service/
-  SelfServicePage.tsx
+  SelfServicePage.tsx     two phases, and the resume seed
+  stages.ts               status → screen, and resumeStep
   api/       types.ts · client.ts · http.ts · mock.ts · index.ts · queries.ts
-  session/   useSession.ts
-  stages/    Find · VerifyOwnership · Otp · Details · Scanning
-             Review/{index,StorySection,ContactSection,MenusSection}
-             Photos · Status
-  components/ JourneyRail · MilestoneToast · StepKicker · ChipPicker
-              PhotoGrid · OtpInput · ProfileStrength
-  content/   journey.ts · copy.ts
+  session/   tokenStore.ts · progressStore.ts
+  stages/    FindStage · VerifyOwnershipStage · OtpStage · DetailsStage
+             ScanningStage · PhotosStage · StatusStage
+             Review/{index,StorySection,ContactSection,MenusSection,useProfileDraft}
+             Bookings/{index,PlatformPicker,PlatformSteps}
+  components/ ClaimLayout · JourneyRail · StepKicker · ProgressLine
+              ChipPicker · PhotoGrid · OtpInput · FeedCards · ManualReview
+              DevStageSwitcher (mock-only)
+  content/   journey.ts
 ```
 
 New generic primitives land in `ui/`: `Chip`, `Switch`, `Accordion`, `Toast`.

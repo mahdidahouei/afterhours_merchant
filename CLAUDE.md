@@ -21,9 +21,10 @@ authenticated area and no dashboard — every route is public.
 Routes: `/` · `/connect` · `/claim` · `/contact-us` · `/terms-and-conditions` ·
 `/privacy-policy` · `*` (404).
 
-`/claim` is owner self-service: find your listing, verify by SMS, let us read
-your website, review the drafted profile, add photos, submit. See
-`docs/specs/2026-08-24-owner-self-service-design.md`.
+`/claim` is owner self-service, in six steps: find your listing, verify by SMS,
+check your details, build the drafted profile, add photos, connect bookings.
+Step 6 is the old Connect widget folded in — `/connect` is retired once this is
+live. See `docs/specs/2026-08-24-owner-self-service-design.md`.
 
 ## Working conventions
 
@@ -67,9 +68,11 @@ defined.** Tailwind maps to those custom properties (`"color-primary":
 "var(--color-primary)"`), and the few CSS Modules read the same variables. Never
 hard-code a hex outside that file.
 
-Because Tailwind colours are custom properties, **opacity modifiers
-(`bg-color-primary/50`) do not work** — the `*Opacity` core plugins are off.
-Use an explicit `rgb(… / …)` arbitrary value instead.
+Each mapped colour is declared twice: `--x-rgb` holds bare `R G B` channels and
+`--x` is the `rgb(...)` the CSS Modules read. Tailwind takes the channel form
+with `<alpha-value>`, so **opacity modifiers work** (`bg-color-primary/50`).
+Adding a colour means adding both halves and the `tailwind.config.ts` entry —
+half of it and the `/NN` variants silently generate nothing, with no error.
 
 Tailwind for layout; `.module.scss` only for the four form primitives whose
 focus and floating-label states Tailwind expresses badly.
@@ -96,25 +99,44 @@ legal markdown, and `config.js`.
 
 `claim.status` decides the screen and nothing else — not `kind`, not which call
 just returned. Stages 0–2 happen before a claim exists, so those three are local
-page state; everything after is a pure function of status. `stages.ts` holds that
+page state; everything after is a function of status. `stages.ts` holds that
 mapping.
+
+**`drafted` is the exception, and the only one.** One status covers three
+screens — build, photos, bookings — so `draftedStep` lives on the page beside
+the status. It is seeded once per claim by `resumeStep`, which derives from what
+the claim holds (a connected platform means bookings, a photo means photos) and
+takes the further of that and the localStorage note in `session/progressStore.ts`.
+Never re-derive on every render: a photo finishing its upload would then yank the
+owner forward mid-edit. Delete both halves if `Claim` ever grows a `currentStep`.
 
 Every mutation returns the complete claim, so `useClaimMutation` replaces the
 cache rather than invalidating it. Never merge, never refetch after a write.
 
 `PUT /claim/profile` replaces outright: every save posts the whole Profile, even
-when one accordion changed. Phone and address are listing facts and go to
+when one accordion changed. Phone is a listing fact and goes to
 `PATCH /claim/place`; email, socials and reservations are profile.
 
+`PATCH /claim/place` takes `{set, value}` for its nullable fields — omitted means
+unchanged, `set: true` with an empty value clears. Use `write()` / `keep()` from
+`api/types.ts` rather than building those by hand. It has **no `address`**: the
+address is Google's and the directory keys off it, so the details screen shows it
+read-only.
+
+`Profile.reservationPlatforms` is free text the scan read off the website.
+`Claim.reservation` is a live integration. They are not the same thing, and step
+6 uses the first only to sort the second's list.
+
 The API is not live yet. `VITE_USE_MOCK=true` (default in development) swaps in
-`api/mock.ts`, a contract-faithful in-memory server. Everything above the
-`OwnerApi` interface cannot tell the difference. Verify with
+`api/mock.ts`, a contract-faithful in-memory server that persists its claim to
+localStorage so a reload resumes instead of looking like an expired session.
+Everything above the `OwnerApi` interface cannot tell the difference. Verify with
 `grep -r "Oli Mazi" dist/` that it stays out of production builds.
 
-Six controls the design draws have no field in the contract — menu-file
-language, IG/TikTok feeds, the scan activity feed, establishment as a chip row,
-the primary-platform star, ratings on result cards. They are marked `PENDING_API`
-in `api/types.ts`, hold local state, and say on screen that they aren't saved yet.
+Two controls the design draws still have no field in the contract: menu-file
+language and the primary-platform star. They are marked `PENDING_API` in
+`api/types.ts` and hold local state. Everything else that used to be listed here
+has landed — IG/TikTok are real OAuth, bookings are a real integration.
 
 ## Errors
 

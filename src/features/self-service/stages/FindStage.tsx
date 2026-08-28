@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { SearchNormal } from "iconsax-reactjs";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
-import { errorMessage, isProblem } from "@/lib/errors";
 import { Button } from "@/ui/Button";
 import { ErrorState } from "@/ui/ErrorState";
 import { Skeleton } from "@/ui/Skeleton";
@@ -171,9 +170,3 @@ function ResultsSkeleton() {
     </ul>
   );
 }
-
-/** Exported so the page can show the right message for a claimed place. */
-export const claimBlockedMessage = (error: unknown): string | null =>
-  isProblem(error, "place_already_claimed") || isProblem(error, "no_phone_on_listing")
-    ? errorMessage(error)
-    : null;
