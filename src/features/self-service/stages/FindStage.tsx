@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { SearchNormal } from "iconsax-reactjs";
-import { cn } from "@/lib/cn";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { errorMessage, isProblem } from "@/lib/errors";
 import { Button } from "@/ui/Button";
@@ -16,10 +15,9 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 type Props = {
   onSelect: (candidate: PlaceCandidate) => void;
-  onRequestListing: (query: string) => void;
 };
 
-export function FindStage({ onSelect, onRequestListing }: Props) {
+export function FindStage({ onSelect }: Props) {
   const [query, setQuery] = useState("");
   const debounced = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
   const search = usePlaceSearch(debounced);
@@ -60,7 +58,7 @@ export function FindStage({ onSelect, onRequestListing }: Props) {
         {hasQuery && !search.isError && isSearching && !search.data && <ResultsSkeleton />}
 
         {hasQuery && !search.isError && !isSearching && results.length === 0 && (
-          <NoResults query={debounced} onRequestListing={onRequestListing} />
+          <NoResults />
         )}
 
         {hasQuery && results.length > 0 && (
@@ -94,9 +92,14 @@ function Spinner() {
 /**
  * A search result.
  *
- * Deliberately thin: the contract warns that Google's text search returns no
- * rating, review count, photo or website, so there is nothing to build a richer
- * card around. Rating arrives on `claim.place` after verification.
+ * Deliberately thin: `GET /places` returns four fields and no more — Google's
+ * text search gives us no rating, review count, photo or website, so there is
+ * nothing to build a richer card around. Rating arrives on `claim.place` after
+ * verification.
+ *
+ * Nor is there a claimed/unclaimed flag. A place that is already taken is only
+ * discovered at `POST /verifications`, which answers `place_already_claimed`;
+ * the verify screen says so there.
  */
 function ResultCard({
   candidate,
@@ -105,18 +108,10 @@ function ResultCard({
   candidate: PlaceCandidate;
   onSelect: (candidate: PlaceCandidate) => void;
 }) {
-  const isClaimed = candidate.claimability === "claimed";
   const cannotText = candidate.phoneMasked === null;
 
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-3 rounded-[16px] border p-4 transition-colors tb:flex-row tb:items-center",
-        isClaimed
-          ? "border-color-border bg-color-background-3"
-          : "border-color-border bg-white hover:border-color-primary/40",
-      )}
-    >
+    <div className="flex flex-col gap-3 rounded-[16px] border border-color-border bg-white p-4 transition-colors hover:border-color-primary/40 tb:flex-row tb:items-center">
       <div className="min-w-0 flex-1">
         <p className="font-satoshi text-[15px] font-semibold text-color-primary-text">
           {candidate.name}
@@ -130,46 +125,19 @@ function ResultCard({
         </p>
       </div>
 
-      {isClaimed ? (
-        <ClaimedNotice />
-      ) : (
-        <Button
-          variant="outline-connect"
-          size="small"
-          onClick={() => onSelect(candidate)}
-          className="h-[44px] shrink-0 text-xs font-normal max-tb:w-full"
-        >
-          {cannotText ? "Continue" : "This is my restaurant"}
-        </Button>
-      )}
-    </div>
-  );
-}
-
-/** `claimability: "claimed"` is a dead end — the contract says point at support. */
-function ClaimedNotice() {
-  return (
-    <div className="shrink-0 text-left tb:text-right">
-      <p className="font-satoshi text-[12px] font-medium text-color-primary-text">
-        Already claimed
-      </p>
-      <a
-        href="/contact-us"
-        className="font-satoshi text-[12px] text-color-secondary-text underline"
+      <Button
+        variant="outline-connect"
+        size="small"
+        onClick={() => onSelect(candidate)}
+        className="h-[44px] shrink-0 text-xs font-normal max-tb:w-full"
       >
-        Contact us
-      </a>
+        {cannotText ? "Continue" : "This is my restaurant"}
+      </Button>
     </div>
   );
 }
 
-function NoResults({
-  query,
-  onRequestListing,
-}: {
-  query: string;
-  onRequestListing: (query: string) => void;
-}) {
+function NoResults() {
   return (
     <div className="flex flex-col items-center gap-3 py-8 text-center">
       <p className="font-satoshi text-[15px] font-semibold text-color-primary-text">
@@ -179,14 +147,12 @@ function NoResults({
         Check the spelling, or add your city to narrow it down. If your restaurant isn't
         listed yet, we can add it for you.
       </p>
-      <Button
-        variant="secondary"
-        size="small"
-        onClick={() => onRequestListing(query)}
-        className="mt-1 h-[44px] text-xs"
+      <a
+        href="/contact-us"
+        className="mt-1 flex h-[44px] items-center justify-center rounded-full border border-color-border px-6 font-satoshi text-xs font-normal text-color-primary-text transition-colors hover:border-color-primary"
       >
         Request a new listing
-      </Button>
+      </a>
     </div>
   );
 }

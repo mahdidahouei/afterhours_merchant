@@ -3,7 +3,7 @@ import { errorMessage, isProblem, ProblemError } from "@/lib/errors";
 import { Accordion } from "@/ui/Accordion";
 import { Button } from "@/ui/Button";
 import { usePatchPlace, useSaveProfile, useTaxonomy } from "../../api/queries";
-import type { Claim } from "../../api/types";
+import { write, type Claim } from "../../api/types";
 import { StageHeading, StagePanel } from "../../components/ClaimLayout";
 import { ContactSection } from "./ContactSection";
 import { MenusSection, type Language } from "./MenusSection";
@@ -73,7 +73,7 @@ export function ReviewStage({
     // profile the owner would then have to re-save.
     if (phoneChanged) {
       const ok = await patchPlace
-        .mutateAsync({ phone: phone.trim() || null })
+        .mutateAsync({ phone: write(phone.trim()) })
         .then(() => true)
         .catch(() => false);
       if (!ok) return false;
@@ -99,7 +99,7 @@ export function ReviewStage({
       {claim.reviewNote && (
         <div
           role="alert"
-          className="mb-5 rounded-[14px] border border-color-warning/40 bg-[#EF894114] p-4"
+          className="mb-5 rounded-[14px] border border-color-warning/40 bg-color-warning/[0.08] p-4"
         >
           <p className="font-satoshi text-[13px] font-semibold text-color-primary-text">
             Our team sent this back

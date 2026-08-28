@@ -2,12 +2,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isProblem } from "@/lib/errors";
 import { readToken } from "../session/tokenStore";
 import { ownerApi } from ".";
-import type { Claim, ClaimStatus, PlacePatch, Profile } from "./types";
+import type {
+  Claim,
+  ClaimStatus,
+  ClaimTicketBody,
+  ListingRequestBody,
+  PlacePatch,
+  Profile,
+  ReservationConnectBody,
+  SocialProvider,
+} from "./types";
 
 export const claimKeys = {
   claim: ["owner", "claim"] as const,
   taxonomy: ["owner", "taxonomy"] as const,
   places: (query: string) => ["owner", "places", query] as const,
+  platforms: ["owner", "reservation-platforms"] as const,
+  guide: (platformId: string) => ["owner", "reservation-guide", platformId] as const,
+  ticketSubjects: ["owner", "ticket-subjects"] as const,
 };
 
 /**
@@ -48,6 +60,33 @@ export function useTaxonomy() {
   });
 }
 
+/** The booking platforms Afterhours integrates with. Changes about monthly. */
+export function useReservationPlatforms() {
+  return useQuery({
+    queryKey: claimKeys.platforms,
+    queryFn: () => ownerApi.listReservationPlatforms(),
+    staleTime: Infinity,
+  });
+}
+
+/** One platform's connection walkthrough. Fetched when the owner picks it. */
+export function useReservationGuide(platformId: string | null) {
+  return useQuery({
+    queryKey: claimKeys.guide(platformId ?? ""),
+    queryFn: () => ownerApi.getReservationGuide(platformId!),
+    enabled: Boolean(platformId),
+    staleTime: Infinity,
+  });
+}
+
+export function useTicketSubjects() {
+  return useQuery({
+    queryKey: claimKeys.ticketSubjects,
+    queryFn: () => ownerApi.listTicketSubjects(),
+    staleTime: Infinity,
+  });
+}
+
 /**
  * The claim. This is the app's single source of truth once a token exists —
  * every screen after verification renders from `claim.status`.
@@ -77,9 +116,9 @@ export function useClaim() {
 /* ── Writes ─────────────────────────────────────────────────────────────── */
 
 /**
- * Every mutation answers with the complete claim, so the cache is replaced
- * rather than invalidated. That is the contract's whole point: nothing to
- * merge, nothing to refetch, and no window where the screen disagrees with
+ * Every claim mutation answers with the complete claim, so the cache is
+ * replaced rather than invalidated. That is the contract's whole point: nothing
+ * to merge, nothing to refetch, and no window where the screen disagrees with
  * the server.
  */
 function useClaimMutation<TArgs>(mutationFn: (args: TArgs) => Promise<Claim>) {
@@ -112,15 +151,41 @@ export const useMovePhoto = () =>
 export const useRemovePhoto = () =>
   useClaimMutation((photoId: string) => ownerApi.removePhoto(photoId));
 
-export const useSubmitClaim = () =>
-  useClaimMutation((_: void) => ownerApi.submitClaim());
+export const useConnectReservation = () =>
+  useClaimMutation((body: ReservationConnectBody) => ownerApi.connectReservation(body));
 
-/* ── Verification ───────────────────────────────────────────────────────── */
+export const useDisconnectReservation = () =>
+  useClaimMutation((platformId: string) => ownerApi.disconnectReservation(platformId));
+
+export const useDisconnectSocial = () =>
+  useClaimMutation((provider: SocialProvider) => ownerApi.disconnectSocial(provider));
+
+export const useSubmitClaim = () => useClaimMutation((_: void) => ownerApi.submitClaim());
+
+/**
+ * Begin an OAuth handshake and hand back where to send the owner.
+ *
+ * Not a claim mutation: the connection is only recorded once the provider calls
+ * our callback, which happens after this tab has already navigated away. The
+ * claim is re-read on return.
+ */
+export function useStartSocialConnect() {
+  return useMutation({
+    mutationFn: ({
+      provider,
+      redirectTo,
+    }: {
+      provider: SocialProvider;
+      redirectTo: string;
+    }) => ownerApi.startSocialConnect(provider, redirectTo),
+  });
+}
+
+/* ── Verification and support ───────────────────────────────────────────── */
 
 export function useSendVerification() {
   return useMutation({
-    mutationFn: (body: { placeId: string; phone?: string }) =>
-      ownerApi.sendVerification(body),
+    mutationFn: (body: { placeId: string }) => ownerApi.sendVerification(body),
   });
 }
 
@@ -140,11 +205,12 @@ export function useCreateSession() {
 
 export function useRequestListing() {
   return useMutation({
-    mutationFn: (body: {
-      name: string;
-      city: string;
-      contactEmail: string;
-      note?: string;
-    }) => ownerApi.requestListing(body),
+    mutationFn: (body: ListingRequestBody) => ownerApi.requestListing(body),
+  });
+}
+
+export function useCreateClaimTicket() {
+  return useMutation({
+    mutationFn: (body: ClaimTicketBody) => ownerApi.createClaimTicket(body),
   });
 }

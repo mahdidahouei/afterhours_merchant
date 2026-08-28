@@ -34,7 +34,7 @@ npm run build && npm run preview
 | --- | --- |
 | `/` | Landing |
 | `/connect` | Connect wizard — restaurant → platform → guide steps → success |
-| `/claim` | Owner self-service — find → verify → details → scan → review → photos |
+| `/claim` | Owner self-service — find → verify → details → scan → build → photos → bookings |
 | `/contact-us` | Two-part contact form |
 | `/terms-and-conditions` | Markdown from `public/legal/` |
 | `/privacy-policy` | Markdown from `public/legal/` |
@@ -55,7 +55,7 @@ src/
     landing/       page, 10 sections, and all copy under content/
     connect/       the wizard, its API layer and step machine
     contact/       the contact form
-    self-service/  the claim flow (8 screens, 15 endpoints)
+    self-service/  the claim flow (9 screens, 23 endpoints)
     wizard/        card / body / actions shared by connect and contact
     legal/         markdown-backed legal pages
     errors/        404 and whole-screen failure
@@ -73,9 +73,35 @@ VITE_USE_MOCK=true   # .env.development — the whole flow is clickable
 VITE_USE_MOCK=false  # .env.production  — real endpoints
 ```
 
-The mock reproduces the contract's latency, status transitions and error codes.
-In it, the OTP `000000` fails and any other six digits succeed. Turning the flag
-off is the only change needed when the backend ships.
+The mock reproduces the contract's latency, status transitions, error codes and
+the booking-platform guides, and it persists the claim to `localStorage` so that
+reloading resumes rather than looking like an expired session. In it, the OTP
+`000000` fails and any other six digits succeed; the account ID `0` is rejected
+by every platform, so the connect failure path is reachable. Turning the flag off
+is the only change needed when the backend ships.
+
+The six steps, and what each one calls:
+
+| Step | Screen | Endpoints |
+| --- | --- | --- |
+| 1 | Find your restaurant | `GET /places` |
+| 2 | Verify ownership | `POST /verifications` · `POST /sessions` · `POST /claim-tickets` |
+| 3 | Check your details | `PATCH /claim/place` · `POST /claim/profile` |
+| 4 | Build your profile | `GET /taxonomy` · `PUT /claim/profile` |
+| 5 | Add your photos | `POST/PATCH/DELETE /claim/photos` · `POST /claim/social/{provider}/connect` |
+| 6 | Connect bookings | `GET /reservation-platforms` (+ `/guide`) · `POST /claim/reservation` · `POST /claim/submit` |
+
+### Resuming
+
+`claim.status` has one value, `drafted`, for the whole of steps 4–6, so the API
+cannot say which of the three an owner stopped on. It is recovered instead: a
+connected platform means step 6, an uploaded photo means step 5, otherwise step
+4 — plus a `claimId`-keyed note in `localStorage` covering the case the
+derivation can't see, which is opening a step and leaving without doing anything
+on it. Whichever is further along wins, so a resume never moves backwards.
+
+A `currentStep` field on `Claim` would replace both halves; see
+`src/features/self-service/session/progressStore.ts`.
 
 ## Configuration
 

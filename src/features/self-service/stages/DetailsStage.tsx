@@ -9,16 +9,21 @@ import SmallMapIcon from "@/assets/icons/small-map.svg?react";
 import GlobeIcon from "@/assets/icons/global.svg?react";
 import { isMockApi, simulateScanFailure } from "../api";
 import { useBuildProfile, usePatchPlace } from "../api/queries";
-import type { Claim, PlacePatch } from "../api/types";
+import { write, type Claim, type PlacePatch } from "../api/types";
 import { StageHeading, StagePanel } from "../components/ClaimLayout";
 
 type Props = { claim: Claim };
 
-type Fields = { name: string; phone: string; address: string; websiteUri: string };
+/**
+ * Address is absent on purpose: `PATCH /claim/place` accepts name, phone,
+ * websiteUri and neighbourhood, and nothing else. The address is Google's and
+ * the directory keys off it, so it is shown but not editable — offering a field
+ * that silently discarded what was typed would be worse than showing the truth.
+ */
+type Fields = { name: string; phone: string; websiteUri: string };
 
 const fieldsOf = (claim: Claim): Fields => ({
   name: claim.place.name,
-  address: claim.place.address,
   phone: claim.place.phone ?? "",
   websiteUri: claim.place.websiteUri ?? "",
 });
@@ -43,16 +48,19 @@ export function DetailsStage({ claim }: Props) {
   const set = (key: keyof Fields) => (event: React.ChangeEvent<HTMLInputElement>) =>
     setFields((prev) => ({ ...prev, [key]: event.target.value }));
 
-  /** Only what actually changed — the contract treats omitted keys as unchanged. */
+  /**
+   * Only what actually changed. An omitted key is unchanged; a `Nullable` with
+   * `set: true` and an empty value is the only way to clear a field, which is
+   * why `write()` exists rather than a bare null.
+   */
   const buildPatch = (): PlacePatch => {
     const original = fieldsOf(claim);
     const patch: PlacePatch = {};
 
     if (fields.name.trim() !== original.name) patch.name = fields.name.trim();
-    if (fields.address.trim() !== original.address) patch.address = fields.address.trim();
-    if (fields.phone.trim() !== original.phone) patch.phone = fields.phone.trim() || null;
+    if (fields.phone.trim() !== original.phone) patch.phone = write(fields.phone.trim());
     if (fields.websiteUri.trim() !== original.websiteUri) {
-      patch.websiteUri = fields.websiteUri.trim() || null;
+      patch.websiteUri = write(fields.websiteUri.trim());
     }
 
     return patch;
@@ -109,13 +117,29 @@ export function DetailsStage({ claim }: Props) {
           value={fields.phone}
           onChange={set("phone")}
         />
-        <TextField
-          size="responsive"
-          placeholder="Address"
-          icon={<SmallMapIcon />}
-          value={fields.address}
-          onChange={set("address")}
-        />
+        <div className="flex items-start gap-3 rounded-[18px] border border-color-border bg-color-background-3 px-4 py-3.5">
+          <span aria-hidden className="mt-0.5 shrink-0 text-color-secondary-text">
+            <SmallMapIcon />
+          </span>
+          <div className="min-w-0">
+            <p className="font-satoshi text-[11px] font-semibold uppercase tracking-[0.12em] text-color-secondary-text">
+              Address
+            </p>
+            <p className="mt-0.5 font-satoshi text-[14px] text-color-primary-text">
+              {claim.place.address}
+            </p>
+            <p className="mt-1 font-satoshi text-[12px] text-color-secondary-text">
+              This comes from your Google listing.{" "}
+              <a
+                href="/contact-us"
+                className="underline underline-offset-4 hover:text-color-primary"
+              >
+                Tell us
+              </a>{" "}
+              if it's wrong.
+            </p>
+          </div>
+        </div>
         <div>
           <TextField
             size="responsive"

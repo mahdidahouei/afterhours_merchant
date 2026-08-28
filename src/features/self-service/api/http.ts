@@ -2,24 +2,31 @@ import { api } from "@/lib/api";
 import { ownerClient } from "./client";
 import type {
   Claim,
+  ClaimTicketBody,
   CreateSessionBody,
   ListingRequestBody,
   PlaceCandidate,
   PlacePatch,
   Profile,
+  ReservationConnectBody,
+  ReservationGuide,
+  ReservationPlatform,
   SendVerificationBody,
   Session,
   SessionInfo,
+  SocialConnectStart,
+  SocialProvider,
   Taxonomy,
+  TicketSubject,
   Verification,
 } from "./types";
 
 /**
- * The fifteen endpoints, exactly as the contract defines them.
+ * Every endpoint the claim flow uses, exactly as the contract defines them.
  *
  * Public calls use the token-free client; everything under /claim and /session
- * uses the bearer client. Every mutation returns the complete Claim, so callers
- * replace their copy rather than merging.
+ * uses the bearer client. Every claim mutation returns the complete Claim, so
+ * callers replace their copy rather than merging.
  */
 export type OwnerApi = {
   /* Public */
@@ -29,19 +36,31 @@ export type OwnerApi = {
   /** Idempotent — call again to resend. There is no resend endpoint. */
   sendVerification(body: SendVerificationBody): Promise<Verification>;
   createSession(body: CreateSessionBody): Promise<Session>;
+  listReservationPlatforms(): Promise<ReservationPlatform[]>;
+  getReservationGuide(platformId: string): Promise<ReservationGuide>;
+  listTicketSubjects(): Promise<TicketSubject[]>;
+  createClaimTicket(body: ClaimTicketBody): Promise<void>;
 
   /* Authenticated */
   getSessionInfo(): Promise<SessionInfo>;
   endSession(): Promise<void>;
   getClaim(): Promise<Claim>;
   patchPlace(patch: PlacePatch): Promise<Claim>;
-  /** Build my profile. `skipScan` fills it in by hand instead. */
+  /** Read the website and draft a profile. `skipScan` fills it in by hand. */
   buildProfile(options?: { skipScan?: boolean }): Promise<Claim>;
   /** Replaces outright — always send the complete Profile. */
   saveProfile(profile: Profile): Promise<Claim>;
   addPhoto(file: File): Promise<Claim>;
   movePhoto(photoId: string, position: number): Promise<Claim>;
   removePhoto(photoId: string): Promise<Claim>;
+  connectReservation(body: ReservationConnectBody): Promise<Claim>;
+  disconnectReservation(platformId: string): Promise<Claim>;
+  /** Hands back the provider's consent screen to send the owner to. */
+  startSocialConnect(
+    provider: SocialProvider,
+    redirectTo: string,
+  ): Promise<SocialConnectStart>;
+  disconnectSocial(provider: SocialProvider): Promise<Claim>;
   submitClaim(): Promise<Claim>;
 };
 
@@ -71,6 +90,27 @@ export const httpOwnerApi: OwnerApi = {
   async createSession(body) {
     const { data } = await api.post<Session>("/sessions", body);
     return data;
+  },
+
+  async listReservationPlatforms() {
+    const { data } = await api.get<ReservationPlatform[]>("/reservation-platforms");
+    return data;
+  },
+
+  async getReservationGuide(platformId) {
+    const { data } = await api.get<ReservationGuide>(
+      `/reservation-platforms/${platformId}/guide`,
+    );
+    return data;
+  },
+
+  async listTicketSubjects() {
+    const { data } = await api.get<TicketSubject[]>("/ticket-subjects");
+    return data;
+  },
+
+  async createClaimTicket(body) {
+    await api.post("/claim-tickets", body);
   },
 
   async getSessionInfo() {
@@ -110,12 +150,39 @@ export const httpOwnerApi: OwnerApi = {
   },
 
   async movePhoto(photoId, position) {
-    const { data } = await ownerClient.patch<Claim>(`/claim/photos/${photoId}`, { position });
+    const { data } = await ownerClient.patch<Claim>(`/claim/photos/${photoId}`, {
+      position,
+    });
     return data;
   },
 
   async removePhoto(photoId) {
     const { data } = await ownerClient.delete<Claim>(`/claim/photos/${photoId}`);
+    return data;
+  },
+
+  async connectReservation(body) {
+    const { data } = await ownerClient.post<Claim>("/claim/reservation", body);
+    return data;
+  },
+
+  async disconnectReservation(platformId) {
+    const { data } = await ownerClient.delete<Claim>(
+      `/claim/reservation/${platformId}`,
+    );
+    return data;
+  },
+
+  async startSocialConnect(provider, redirectTo) {
+    const { data } = await ownerClient.post<SocialConnectStart>(
+      `/claim/social/${provider}/connect`,
+      { redirectTo },
+    );
+    return data;
+  },
+
+  async disconnectSocial(provider) {
+    const { data } = await ownerClient.delete<Claim>(`/claim/social/${provider}`);
     return data;
   },
 

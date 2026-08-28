@@ -1,9 +1,10 @@
 /**
  * Owner Self-Service API — the contract, in TypeScript.
  *
- * Transcribed from `contracts/owner-api.v1.yaml`. When that spec is published,
- * replace this file with the generated output:
- *   openapi-typescript contracts/owner-api.v1.yaml -o src/api/types.d.ts
+ * Transcribed from `swagger/docs.json` (Owner Panel API), `owner-self-service`
+ * and `Reservation Platform` tags. When the spec is served, replace this file
+ * with the generated output:
+ *   openapi-typescript swagger/docs.json -o src/api/types.d.ts
  *
  * Two rules from the contract are load-bearing here:
  *   1. Every mutation returns the complete Claim. Replace your copy with it.
@@ -13,11 +14,15 @@
 
 /* ── Claim ──────────────────────────────────────────────────────────────── */
 
+/**
+ * The seven statuses, exactly as `GET /admin/claims` documents its filter:
+ * `verified|scanning|scan_failed|drafted|submitted|approved|live`.
+ */
 export type ClaimStatus =
   | "verified" // details on file, waiting to be confirmed
   | "scanning" // reading the website — poll
   | "scan_failed" // couldn't read it; see scanError
-  | "drafted" // profile ready to review, edit, photograph
+  | "drafted" // profile ready to review, photograph, connect
   | "submitted" // with an admin
   | "approved" // approved, being written
   | "live"; // in the directory
@@ -31,6 +36,10 @@ export type Claim = {
   /** Null until status reaches "drafted". */
   profile: Profile | null;
   photos: Photo[];
+  /** Booking platforms actually connected. Empty until one is. */
+  reservation: ClaimReservation[];
+  /** Authorised social accounts. Empty is the common case — linking is optional. */
+  social: SocialConnection[];
   /** Non-null only while "scan_failed". */
   scanError: string | null;
   /** Why an admin sent it back. */
@@ -56,13 +65,34 @@ export type Place = {
   googleMapsUri: string | null;
 };
 
-/** Omitted means unchanged; `null` means clear it. At least one key required. */
+/**
+ * A nullable field on the wire.
+ *
+ * The contract distinguishes "leave this alone" from "clear it", and a plain
+ * `null` cannot say which. `{ set: false }` is unchanged; `{ set: true, value }`
+ * writes; `{ set: true, value: "" }` clears. Use the `keep` / `write` helpers
+ * rather than building these by hand.
+ */
+export type Nullable<T> = { set: boolean; value?: T };
+
+export const keep = <T>(): Nullable<T> => ({ set: false });
+export const write = (value: string | null): Nullable<string> => ({
+  set: true,
+  value: value ?? "",
+});
+
+/**
+ * What `PATCH /claim/place` accepts.
+ *
+ * Note there is no `address`: the contract does not let the owner rewrite it,
+ * because the address is Google's and the directory keys off it. The details
+ * screen shows it read-only for that reason.
+ */
 export type PlacePatch = Partial<{
   name: string;
-  address: string;
-  phone: string | null;
-  websiteUri: string | null;
-  neighbourhood: string | null;
+  phone: Nullable<string>;
+  websiteUri: Nullable<string>;
+  neighbourhood: Nullable<string>;
 }>;
 
 /* ── Profile ────────────────────────────────────────────────────────────── */
@@ -83,7 +113,7 @@ export type Profile = {
   establishmentType: string | null;
   /** No phone here — see Place.phone. */
   email: string | null;
-  /** Handles, without the @. */
+  /** Handles, without the @. Facebook can only be typed, never connected. */
   social: {
     instagram: string | null;
     facebook: string | null;
@@ -91,7 +121,10 @@ export type Profile = {
   };
   reservable: boolean;
   reservationUrl: string | null;
-  /** Free text lifted off the website. */
+  /**
+   * Free text lifted off the website — "we seem to book through OpenTable".
+   * Not the same thing as `Claim.reservation`, which is a live integration.
+   */
   reservationPlatforms: string[];
   menus: Menu[];
 };
@@ -119,10 +152,11 @@ export type Photo = {
   photoId: string;
   /** Display order — the first photo leads the listing. */
   position: number;
+  /**
+   * Safe to put straight into an <img src>. Unguessable rather than signed —
+   * the uuid in the object name keeps an unpublished photo private.
+   */
   url: string;
-  width: number;
-  height: number;
-  uploadedAt: string;
 };
 
 export const PHOTO_LIMITS = {
@@ -131,28 +165,109 @@ export const PHOTO_LIMITS = {
   accept: ["image/jpeg", "image/png", "image/webp"],
 } as const;
 
-/* ── Search, verification, session ──────────────────────────────────────── */
+/** The design's "what to show" prompts. Guidance only — the API has no slots. */
+export const PHOTO_PROMPTS = [
+  "The room at its best",
+  "Interior",
+  "Signature dishes",
+  "Drinks or bar",
+  "Your team",
+] as const;
 
-export type Claimability =
-  | "available" // not in the directory — full flow, website gets scanned
-  | "listed" // in the directory, unclaimed — same screens, no scan
-  | "claimed"; // taken — dead end, point at support
+/** How many upload tiles to draw when the owner has fewer photos than this. */
+export const PHOTO_TARGET = 6;
+
+/* ── Reservations (step 6) ──────────────────────────────────────────────── */
+
+/** A platform Afterhours can integrate with. From `GET /reservation-platforms`. */
+export type ReservationPlatform = {
+  id: string;
+  name: string;
+  iconUrl: string | null;
+};
+
+/**
+ * One page of a platform's connection guide.
+ *
+ * `need` is deliberately loose in the contract — "shape is the platform's, not
+ * ours". A step that carries one asks the owner for a credential; a step without
+ * one is pure instruction. That is the whole rule the UI needs.
+ */
+export type GuideStep = {
+  step: number;
+  title: string;
+  /** Sentences, rendered as a numbered list. */
+  body: string[];
+  need?: GuideNeed | null;
+  /** A short screen recording of the same steps. May be absent. */
+  video: string | null;
+};
+
+export type GuideNeed = {
+  /** Which credential `POST /claim/reservation` wants this in. */
+  field: "account_id" | "apikey";
+  placeholder?: string;
+};
+
+export type ReservationGuide = {
+  name: string;
+  iconUrl: string | null;
+  steps: GuideStep[];
+};
+
+/** A platform the owner has actually connected. Lives on `Claim.reservation`. */
+export type ClaimReservation = {
+  platformId: string;
+  platformName: string;
+  platformIcon: string | null;
+  /** Echoed back so the owner can check what they entered. */
+  integrationId: string | null;
+};
+
+export type ReservationConnectBody = {
+  platformId: string;
+  integrationId?: string;
+  /** Some platforms are keyless and hand one back instead. */
+  apiKey?: string;
+};
+
+/* ── Social connections ─────────────────────────────────────────────────── */
+
+/** Facebook cannot be connected, only typed — see `Profile.social`. */
+export type SocialProvider = "instagram" | "tiktok";
+
+export type SocialConnection = {
+  provider: SocialProvider;
+  /** What to show the owner so they recognise the account. */
+  handle: string | null;
+  connectedAt: string;
+  /**
+   * The provider withdrew the grant, so the connection needs redoing. The row
+   * is kept so this can be said out loud rather than the account silently
+   * disappearing.
+   */
+  revoked: boolean;
+};
+
+export type SocialConnectStart = { authorizeUrl: string; state: string };
+
+/* ── Search, verification, session ──────────────────────────────────────── */
 
 export type PlaceCandidate = {
   placeId: string;
   name: string;
   address: string;
-  /** "+31 •• ••• 1981" — null means we can't verify by text. */
+  /** "+31 •• ••• 1981" — null means we have no number to text, so no claim. */
   phoneMasked: string | null;
-  claimability: Claimability;
 };
 
 export type Verification = {
   verificationId: string;
   phoneMasked: string;
   expiresAt: string;
-  /** Earliest you may POST /verifications again. */
+  /** Earliest you may POST /verifications again. Keep resend disabled until then. */
   resendAvailableAt: string;
+  /** Advisory — the OTP service doesn't report the real remaining count. */
   attemptsRemaining: number;
 };
 
@@ -168,24 +283,33 @@ export type Taxonomy = {
   establishmentTypes: string[];
 };
 
+/* ── Support tickets ────────────────────────────────────────────────────── */
+
+/** From `GET /ticket-subjects`. */
+export type TicketSubject = { id: string; name: string };
+
+/** `POST /claim-tickets` — the "I can't get that text" escape hatch. */
+export type ClaimTicketBody = {
+  subjectId: string;
+  fullName: string;
+  contactEmail: string;
+  contactNumber: string;
+  restaurantName: string;
+  restaurantAddress: string;
+  content: string;
+};
+
 /* ── Request bodies ─────────────────────────────────────────────────────── */
 
-export type SendVerificationBody = {
-  placeId: string;
-  /**
-   * Set when the owner picks "I use a different number". The contract documents
-   * only `placeId`; the server checks any supplied number against the listing
-   * and answers `no_phone_on_listing` when it doesn't match.
-   */
-  phone?: string;
-};
+/** Only the place. There is no way to redirect the code to another number. */
+export type SendVerificationBody = { placeId: string };
 
 export type CreateSessionBody = { verificationId: string; code: string };
 
 export type ListingRequestBody = {
   name: string;
   city: string;
-  contactEmail: string;
+  email: string;
   note?: string;
 };
 
@@ -194,25 +318,21 @@ export type ListingRequestBody = {
 /**
  * PENDING_API — built, visible, and held in local state only.
  *
- * The design includes these; the contract's "Before you design" section says
- * each one does not exist in v1. They are kept so the screens match the
- * approved design and so wiring them later is a one-line change per field,
- * rather than rebuilding the control.
+ * Everything else the design showed has since landed: IG/TikTok are real OAuth
+ * (`POST /claim/social/{provider}/connect`) and bookings are a real integration
+ * (`POST /claim/reservation`). What remains has no field anywhere in the spec.
  *
  * Nothing here is sent to the server, and the UI says so where a user could
  * otherwise assume it was saved.
  */
 export type PendingApi = {
-  /** Menu files carry no language in v1. */
+  /** `ClaimMenuFile` carries title/link/type — no language. */
   menuFileLanguages: Record<string, "NL" | "EN" | "DE" | "FR">;
-  /** Instagram / TikTok feed connection is explicitly not in v1. */
-  feeds: { instagram: boolean; tiktok: boolean };
-  /** `reservationPlatforms` is a flat list — there is no primary. */
+  /** `reservationPlatforms` is a flat list of strings — there is no primary. */
   primaryPlatform: string | null;
 };
 
 export const EMPTY_PENDING_API: PendingApi = {
   menuFileLanguages: {},
-  feeds: { instagram: false, tiktok: false },
   primaryPlatform: null,
 };

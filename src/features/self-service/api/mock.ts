@@ -4,21 +4,29 @@ import type { OwnerApi } from "./http";
 import type {
   Claim,
   ClaimStatus,
+  ClaimReservation,
+  Nullable,
   PlaceCandidate,
   Photo,
   Place,
   Profile,
+  ReservationGuide,
+  ReservationPlatform,
+  SocialConnection,
+  SocialProvider,
   Taxonomy,
+  TicketSubject,
   Verification,
 } from "./types";
 
 /**
  * An in-memory stand-in for the owner API, faithful to the contract.
  *
- * It exists because the backend is not live yet and the flow is eight screens
+ * It exists because the backend is not live yet and the flow is nine screens
  * deep — without it, nothing past the search box can be seen or reviewed. It
  * reproduces the parts that shape the UI: latency, the status transitions, the
- * scan that takes time and can fail, and the real error codes.
+ * scan that takes time and can fail, the booking-platform guides, and the real
+ * error codes.
  *
  * Enabled by VITE_USE_MOCK. Delete this file and its two references when the
  * real API ships.
@@ -29,7 +37,7 @@ const SCAN_DURATION_MS = 9_000;
 const CODE_TTL_MS = 5 * 60 * 1000;
 const RESEND_AFTER_MS = 30 * 1000;
 
-/** The code that always works, and the one that always fails. */
+/** The code that always fails. Anything else is accepted. */
 const WRONG_CODE = "000000";
 
 const wait = (ms = LATENCY_MS) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -41,6 +49,10 @@ const fail = (code: ProblemCode, extra: ProblemBody = {}, retryAfter?: number): 
 const iso = (offsetMs = 0) => new Date(Date.now() + offsetMs).toISOString();
 const id = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 
+/** Apply a `Nullable<string>` patch field: unset leaves the value alone. */
+const patched = (current: string | null, next?: Nullable<string>): string | null =>
+  next?.set ? next.value?.trim() || null : current;
+
 /* ── Seed data ──────────────────────────────────────────────────────────── */
 
 const CANDIDATES: PlaceCandidate[] = [
@@ -49,37 +61,31 @@ const CANDIDATES: PlaceCandidate[] = [
     name: "Oli Mazi",
     address: "Oudegracht 195, 3511 NG Utrecht",
     phoneMasked: "+31 •• ••• 1981",
-    claimability: "available",
   },
   {
     placeId: "pl_gys",
     name: "Gys Utrecht",
     address: "Voorstraat 77, 3512 AK Utrecht",
     phoneMasked: "+31 •• ••• 4420",
-    claimability: "listed",
   },
   {
     placeId: "pl_broei",
     name: "Broei",
     address: "Jaarbeursplein 6, 3521 AL Utrecht",
     phoneMasked: "+31 •• ••• 7788",
-    claimability: "available",
-  },
-  {
-    placeId: "pl_taken",
-    name: "Café Olivier",
-    address: "Achter Clarenburg 6a, 3511 JJ Utrecht",
-    phoneMasked: "+31 •• ••• 3301",
-    claimability: "claimed",
   },
   {
     placeId: "pl_nophone",
     name: "De Zagerij",
     address: "Vlampijpstraat 84, 3534 AR Utrecht",
     phoneMasked: null,
-    claimability: "available",
   },
 ];
+
+/** Not in the contract — the mock's own note of which place is already taken. */
+const ALREADY_CLAIMED = new Set(["pl_taken"]);
+/** Places that are already in the directory: no scan, profile arrives filled. */
+const ALREADY_LISTED = new Set(["pl_gys"]);
 
 const TAXONOMY: Taxonomy = {
   cuisines: [
@@ -166,22 +172,86 @@ const SCANNED_PROFILE: Profile = {
   social: { instagram: "oli.mazi.utrecht", facebook: null, tiktok: null },
   reservable: true,
   reservationUrl: "https://olimazi.nl/reserveren",
-  reservationPlatforms: ["Formitable"],
+  reservationPlatforms: ["Formitable", "OpenTable"],
   menus: [
     {
       title: "Dinner",
-      files: [
-        { title: "Dinner menu", link: "https://olimazi.nl/menu.pdf", type: "pdf" },
-      ],
+      files: [{ title: "Dinner menu", link: "https://olimazi.nl/menu.pdf", type: "pdf" }],
     },
     {
       title: "Drinks",
-      files: [
-        { title: "Wine list", link: "https://olimazi.nl/wine", type: "webpage" },
-      ],
+      files: [{ title: "Wine list", link: "https://olimazi.nl/wine", type: "webpage" }],
     },
   ],
 };
+
+/* ── Booking platforms ──────────────────────────────────────────────────── */
+
+const PLATFORMS: (ReservationPlatform & { domain: string })[] = [
+  { id: "pf_guestplan", name: "Guestplan", iconUrl: null, domain: "app.guestplan.com" },
+  { id: "pf_formitable", name: "Formitable", iconUrl: null, domain: "app.formitable.com" },
+  { id: "pf_gotable", name: "GoTable", iconUrl: null, domain: "app.gotable.nl" },
+  { id: "pf_zenchef", name: "Zenchef", iconUrl: null, domain: "app.zenchef.com" },
+  {
+    id: "pf_opentable",
+    name: "OpenTable",
+    iconUrl: null,
+    domain: "guestcenter.opentable.com",
+  },
+  { id: "pf_thefork", name: "TheFork", iconUrl: null, domain: "manager.thefork.com" },
+  {
+    id: "pf_covermanager",
+    name: "CoverManager",
+    iconUrl: null,
+    domain: "app.covermanager.com",
+  },
+  { id: "pf_resy", name: "Resy", iconUrl: null, domain: "os.resy.com" },
+  { id: "pf_tebi", name: "Tebi", iconUrl: null, domain: "app.tebi.co" },
+];
+
+/**
+ * Every platform's guide has the same two beats — install the integration, then
+ * hand over the id that says which restaurant you are — so one generator covers
+ * all of them. The real API returns a hand-written guide per platform.
+ */
+function guideFor(platform: (typeof PLATFORMS)[number]): ReservationGuide {
+  return {
+    name: platform.name,
+    iconUrl: platform.iconUrl,
+    steps: [
+      {
+        step: 1,
+        title: "Install Afterhours.",
+        body: [
+          `Open ${platform.name}: ${platform.domain}`,
+          "Select Apps → Manage apps from the left menu.",
+          "Choose Booking partners from the top filter bar.",
+          "Find Afterhours and click Install.",
+        ],
+        need: null,
+        video: null,
+      },
+      {
+        step: 2,
+        title: "Link your account.",
+        body: [
+          `In ${platform.name}, open Settings from the left menu.`,
+          "Click Account, then General.",
+          "Copy your Account ID and paste it below.",
+        ],
+        need: { field: "account_id", placeholder: "e.g. 50783" },
+        video: null,
+      },
+    ],
+  };
+}
+
+const TICKET_SUBJECTS: TicketSubject[] = [
+  { id: "ts_no_access", name: "I can't access the number on the listing" },
+  { id: "ts_wrong_number", name: "The number on the listing is wrong" },
+  { id: "ts_not_listed", name: "My restaurant isn't listed" },
+  { id: "ts_other", name: "Something else" },
+];
 
 /* ── Mutable state ──────────────────────────────────────────────────────── */
 
@@ -200,18 +270,86 @@ let scanStartedAt = 0;
 /** Set from the Details screen's "simulate a failed read" switch. */
 let scanShouldFail = false;
 
+/**
+ * The mock's own storage, so a reload behaves like the real thing.
+ *
+ * Without this the claim lives in a module variable and dies with the page,
+ * while the token in localStorage survives — so every reload looked like an
+ * expired session and dumped the owner back at the search box. That made the
+ * contract's headline promise, "leave any time and pick up where you left off",
+ * the one thing the mock could not demonstrate.
+ *
+ * Blob URLs from uploaded photos don't survive a reload, so they are dropped on
+ * the way back in rather than restored as broken images.
+ */
+const STORE_KEY = "afterhours.mock.claim";
+
+function persist() {
+  try {
+    if (claim) localStorage.setItem(STORE_KEY, JSON.stringify(claim));
+    else localStorage.removeItem(STORE_KEY);
+  } catch {
+    /* private mode — the mock just goes back to being per-tab */
+  }
+}
+
+function restore(): Claim | null {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return null;
+
+    const stored = JSON.parse(raw) as Claim;
+    if (!stored?.claimId) return null;
+
+    stored.photos = stored.photos.filter((photo) => !photo.url.startsWith("blob:"));
+    stored.photos.forEach((photo, index) => (photo.position = index));
+    return stored;
+  } catch {
+    return null;
+  }
+}
+
+claim = restore();
+
 export function setMockScanFailure(shouldFail: boolean) {
   scanShouldFail = shouldFail;
 }
 
+/** Solid-colour placeholders, so seeded screens have photos without any fetch. */
+const SEEDED_PHOTOS: Photo[] = ["#8A6535", "#321B15", "#6B6357", "#B09050"].map(
+  (colour, index) => ({
+    photoId: `pho_seed_${index}`,
+    position: index,
+    url:
+      "data:image/svg+xml;utf8," +
+      encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><rect width="800" height="1000" fill="${colour}"/></svg>`,
+      ),
+  }),
+);
+
+const SEEDED_RESERVATION: ClaimReservation = {
+  platformId: "pf_opentable",
+  platformName: "OpenTable",
+  platformIcon: null,
+  integrationId: "50783",
+};
+
 /**
  * Drop the mock straight into a given status, for looking at a screen without
- * walking the eight steps that normally lead to it.
+ * walking the nine steps that normally lead to it.
+ *
+ * `photos` and `reservation` are separate switches because within `drafted` they
+ * are what decides which of the three sub-screens a resumed session lands on —
+ * so the switcher has to be able to set them independently of the status.
  *
  * Only reachable from the dev-only stage switcher, and only when the mock is
  * the active implementation.
  */
-export function seedMockClaim(status: ClaimStatus, options?: { reviewNote?: string }) {
+export function seedMockClaim(
+  status: ClaimStatus,
+  options?: { reviewNote?: string; photos?: boolean; reservation?: boolean },
+) {
   claim = makeClaim("pl_oli_mazi");
   claim.status = status;
 
@@ -226,30 +364,20 @@ export function seedMockClaim(status: ClaimStatus, options?: { reviewNote?: stri
 
   claim.reviewNote = options?.reviewNote ?? null;
 
-  // Submitted and later have been through photos, so give them something to show.
-  claim.photos = ["submitted", "approved", "live"].includes(status)
-    ? SEEDED_PHOTOS.map((photo, index) => ({ ...photo, position: index }))
-    : [];
+  // Submitted and later have been all the way through, so give them the lot.
+  const isPast = ["submitted", "approved", "live"].includes(status);
+
+  claim.photos =
+    options?.photos ?? isPast
+      ? SEEDED_PHOTOS.map((photo, index) => ({ ...photo, position: index }))
+      : [];
+
+  claim.reservation = (options?.reservation ?? isPast) ? [{ ...SEEDED_RESERVATION }] : [];
 
   scanStartedAt = Date.now();
   writeToken(id("tok"), iso(24 * 60 * 60 * 1000));
+  persist();
 }
-
-/** Solid-colour placeholders, so seeded screens have photos without any fetch. */
-const SEEDED_PHOTOS: Photo[] = ["#8A6535", "#321B15", "#6B6357", "#B09050"].map(
-  (colour, index) => ({
-    photoId: `pho_seed_${index}`,
-    position: index,
-    url:
-      "data:image/svg+xml;utf8," +
-      encodeURIComponent(
-        `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><rect width="800" height="1000" fill="${colour}"/></svg>`,
-      ),
-    width: 800,
-    height: 1000,
-    uploadedAt: new Date(0).toISOString(),
-  }),
-);
 
 const emptyProfile = (): Profile => ({
   tagline: null,
@@ -271,13 +399,13 @@ function makeClaim(placeId: string): Claim {
   const place = PLACES[placeId] ?? PLACES.pl_oli_mazi;
   return {
     claimId: id("clm"),
-    kind: CANDIDATES.find((c) => c.placeId === placeId)?.claimability === "listed"
-      ? "existing"
-      : "new",
+    kind: ALREADY_LISTED.has(placeId) ? "existing" : "new",
     status: "verified",
     place: { ...place },
     profile: null,
     photos: [],
+    reservation: [],
+    social: [],
     scanError: null,
     reviewNote: null,
     createdAt: iso(),
@@ -320,7 +448,11 @@ function requireClaim(...legal: ClaimStatus[]): Claim {
   return claim;
 }
 
-const snapshot = (): Claim => structuredClone(claim!);
+/** Take the claim to the caller, and to storage on the way past. */
+const snapshot = (): Claim => {
+  persist();
+  return structuredClone(claim!);
+};
 
 /* ── The implementation ─────────────────────────────────────────────────── */
 
@@ -344,19 +476,40 @@ export const mockOwnerApi: OwnerApi = {
     await wait();
   },
 
-  async sendVerification({ placeId, phone }) {
+  async listReservationPlatforms() {
+    await wait(260);
+    return PLATFORMS.map(({ id: platformId, name, iconUrl }) => ({
+      id: platformId,
+      name,
+      iconUrl,
+    }));
+  },
+
+  async getReservationGuide(platformId) {
+    await wait(340);
+    const platform = PLATFORMS.find((p) => p.id === platformId);
+    if (!platform) return fail("not_found", { status: 404 });
+    return guideFor(platform);
+  },
+
+  async listTicketSubjects() {
+    await wait(200);
+    return structuredClone(TICKET_SUBJECTS);
+  },
+
+  async createClaimTicket() {
+    await wait(600);
+  },
+
+  async sendVerification({ placeId }) {
     await wait();
 
     const candidate = CANDIDATES.find((c) => c.placeId === placeId);
     if (!candidate) return fail("not_found", { status: 404 });
-    if (candidate.claimability === "claimed") {
+    if (ALREADY_CLAIMED.has(placeId)) {
       return fail("place_already_claimed", { status: 409 });
     }
     if (!candidate.phoneMasked) {
-      return fail("no_phone_on_listing", { status: 409 });
-    }
-    // A custom number has to match the listing. "1981" is Oli Mazi's.
-    if (phone && !phone.replace(/\D/g, "").endsWith("1981")) {
       return fail("no_phone_on_listing", { status: 409 });
     }
 
@@ -399,10 +552,12 @@ export const mockOwnerApi: OwnerApi = {
       });
     }
 
-    // Verifying the same number again resumes the same claim.
+    // Verifying the same number again resumes the same claim — which is what
+    // makes "leave and come back" testable against the mock.
     if (!claim || claim.place.placeId !== pending.placeId) {
       claim = makeClaim(pending.placeId);
       if (claim.kind === "existing") {
+        claim.status = "drafted";
         claim.profile = structuredClone(SCANNED_PROFILE);
       }
     }
@@ -428,6 +583,8 @@ export const mockOwnerApi: OwnerApi = {
   async endSession() {
     await wait(160);
     clearToken();
+    claim = null;
+    persist();
   },
 
   async getClaim() {
@@ -439,7 +596,14 @@ export const mockOwnerApi: OwnerApi = {
   async patchPlace(patch) {
     await wait();
     const current = requireClaim("verified", "scan_failed", "drafted");
-    current.place = { ...current.place, ...patch };
+
+    current.place = {
+      ...current.place,
+      name: patch.name?.trim() || current.place.name,
+      phone: patched(current.place.phone, patch.phone),
+      websiteUri: patched(current.place.websiteUri, patch.websiteUri),
+      neighbourhood: patched(current.place.neighbourhood, patch.neighbourhood),
+    };
     current.updatedAt = iso();
     return snapshot();
   },
@@ -477,19 +641,13 @@ export const mockOwnerApi: OwnerApi = {
       return fail("invalid_request", { status: 400, detail: "That's the twelfth photo." });
     }
 
-    const url = URL.createObjectURL(file);
-    const { width, height } = await readImageSize(url);
     await wait(700);
 
-    const photo: Photo = {
+    current.photos.push({
       photoId: id("pho"),
       position: current.photos.length,
-      url,
-      width,
-      height,
-      uploadedAt: iso(),
-    };
-    current.photos.push(photo);
+      url: URL.createObjectURL(file),
+    });
     current.updatedAt = iso();
     return snapshot();
   },
@@ -513,6 +671,61 @@ export const mockOwnerApi: OwnerApi = {
     const current = requireClaim("drafted");
     current.photos = current.photos.filter((p) => p.photoId !== photoId);
     current.photos.forEach((p, index) => (p.position = index));
+    current.updatedAt = iso();
+    return snapshot();
+  },
+
+  async connectReservation({ platformId, integrationId }) {
+    await wait(1_600);
+    const current = requireClaim("drafted");
+
+    const platform = PLATFORMS.find((p) => p.id === platformId);
+    if (!platform) return fail("not_found", { status: 404 });
+
+    // "0" is the mock's rejected credential, so the failure path is reachable.
+    if (integrationId?.trim() === "0") {
+      return fail("invalid_request", {
+        status: 400,
+        detail: `${platform.name} doesn't recognise that account ID.`,
+      });
+    }
+
+    current.reservation = [
+      ...current.reservation.filter((r) => r.platformId !== platformId),
+      {
+        platformId,
+        platformName: platform.name,
+        platformIcon: platform.iconUrl,
+        integrationId: integrationId?.trim() || null,
+      },
+    ];
+    current.updatedAt = iso();
+    return snapshot();
+  },
+
+  async disconnectReservation(platformId) {
+    await wait();
+    const current = requireClaim("drafted");
+    current.reservation = current.reservation.filter((r) => r.platformId !== platformId);
+    current.updatedAt = iso();
+    return snapshot();
+  },
+
+  async startSocialConnect(provider, redirectTo) {
+    await wait();
+    requireClaim("drafted");
+
+    // No provider to bounce off, so the mock hands back a URL that comes
+    // straight back with the connection already made. Same shape, same flow.
+    const state = id("st");
+    connectOnReturn(provider);
+    return { authorizeUrl: redirectTo, state };
+  },
+
+  async disconnectSocial(provider) {
+    await wait();
+    const current = requireClaim("drafted");
+    current.social = current.social.filter((s) => s.provider !== provider);
     current.updatedAt = iso();
     return snapshot();
   },
@@ -552,11 +765,22 @@ export const mockOwnerApi: OwnerApi = {
   },
 };
 
-function readImageSize(url: string): Promise<{ width: number; height: number }> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    img.onerror = () => resolve({ width: 1200, height: 800 });
-    img.src = url;
-  });
+const HANDLES: Record<SocialProvider, string> = {
+  instagram: "oli.mazi.utrecht",
+  tiktok: "olimazi",
+};
+
+/** Record the account as linked, as a real provider callback would have. */
+function connectOnReturn(provider: SocialProvider) {
+  if (!claim) return;
+  claim.social = [
+    ...claim.social.filter((s) => s.provider !== provider),
+    {
+      provider,
+      handle: HANDLES[provider],
+      connectedAt: iso(),
+      revoked: false,
+    } satisfies SocialConnection,
+  ];
+  claim.updatedAt = iso();
 }

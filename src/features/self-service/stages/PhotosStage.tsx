@@ -1,24 +1,18 @@
 import { useRef, useState } from "react";
+import { ArrowLeft } from "iconsax-reactjs";
 import { cn } from "@/lib/cn";
-import { errorMessage, isProblem } from "@/lib/errors";
+import { errorMessage } from "@/lib/errors";
 import { Button } from "@/ui/Button";
-import { Switch } from "@/ui/Switch";
-import {
-  useAddPhoto,
-  useMovePhoto,
-  useRemovePhoto,
-  useSubmitClaim,
-} from "../api/queries";
-import { PHOTO_LIMITS, type Claim, type PendingApi } from "../api/types";
+import { useAddPhoto, useMovePhoto, useRemovePhoto } from "../api/queries";
+import { PHOTO_LIMITS, PHOTO_PROMPTS, PHOTO_TARGET, type Claim } from "../api/types";
 import { StageHeading, StagePanel } from "../components/ClaimLayout";
+import { FeedCards } from "../components/FeedCards";
 import { PhotoGrid } from "../components/PhotoGrid";
 
 type Props = {
   claim: Claim;
   onBack: () => void;
-  /** PENDING_API — feed connection is explicitly not in v1. */
-  feeds: PendingApi["feeds"];
-  onFeedsChange: (feeds: PendingApi["feeds"]) => void;
+  onContinue: () => void;
 };
 
 /** Reject before uploading rather than round-tripping a 413 or a 415. */
@@ -32,7 +26,7 @@ function rejectionReason(file: File): string | null {
   return null;
 }
 
-export function PhotosStage({ claim, onBack, feeds, onFeedsChange }: Props) {
+export function PhotosStage({ claim, onBack, onContinue }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDropping, setIsDropping] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -41,7 +35,6 @@ export function PhotosStage({ claim, onBack, feeds, onFeedsChange }: Props) {
   const addPhoto = useAddPhoto();
   const movePhoto = useMovePhoto();
   const removePhoto = useRemovePhoto();
-  const submit = useSubmitClaim();
 
   const remaining = PHOTO_LIMITS.maxCount - claim.photos.length;
   const isFull = remaining <= 0;
@@ -80,7 +73,10 @@ export function PhotosStage({ claim, onBack, feeds, onFeedsChange }: Props) {
       );
   };
 
-  const missingPhotos = isProblem(submit.error, "profile_incomplete");
+  const pick = () => inputRef.current?.click();
+
+  /** Dashed tiles for the photos not added yet, so the grid reads as a target. */
+  const emptySlots = Math.max(0, PHOTO_TARGET - claim.photos.length);
 
   return (
     <StagePanel>
@@ -88,6 +84,22 @@ export function PhotosStage({ claim, onBack, feeds, onFeedsChange }: Props) {
         Add 5–7 photos of your atmosphere, interior, and food. Warm, evening light works
         best — guests choose with their eyes.
       </StageHeading>
+
+      <FeedCards connections={claim.social} />
+
+      <div className="mt-7 flex flex-wrap items-center gap-2">
+        <p className="mr-1 font-satoshi text-[11px] font-semibold uppercase tracking-[0.12em] text-color-secondary-text">
+          What to show
+        </p>
+        {PHOTO_PROMPTS.map((prompt) => (
+          <span
+            key={prompt}
+            className="rounded-full bg-color-secondary/60 px-3 py-1 font-satoshi text-[12px] text-color-primary-text"
+          >
+            {prompt}
+          </span>
+        ))}
+      </div>
 
       <div
         onDragOver={(event) => {
@@ -101,19 +113,10 @@ export function PhotosStage({ claim, onBack, feeds, onFeedsChange }: Props) {
           if (!isFull) void upload(event.dataTransfer.files);
         }}
         className={cn(
-          "rounded-[16px] border-2 border-dashed p-6 text-center transition-colors",
-          isDropping ? "border-color-primary bg-color-secondary/30" : "border-color-border",
-          isFull && "opacity-50",
+          "mt-4 rounded-[16px] transition-colors",
+          isDropping && "bg-color-secondary/30 outline-dashed outline-2 outline-color-primary",
         )}
       >
-        <p className="font-satoshi text-[14px] font-medium text-color-primary-text">
-          Drag photos here, or browse
-        </p>
-        <p className="mt-1 font-satoshi text-[12px] text-color-secondary-text">
-          JPEG, PNG or WebP · up to 10 MB each · {claim.photos.length} of{" "}
-          {PHOTO_LIMITS.maxCount} added
-        </p>
-
         <input
           ref={inputRef}
           type="file"
@@ -126,29 +129,7 @@ export function PhotosStage({ claim, onBack, feeds, onFeedsChange }: Props) {
           }}
         />
 
-        <Button
-          variant="secondary"
-          size="responsive"
-          disabled={isFull || addPhoto.isPending}
-          isLoading={addPhoto.isPending}
-          onClick={() => inputRef.current?.click()}
-          className="mt-3.5 h-[42px] rounded-full text-[13px] font-normal"
-        >
-          Choose photos
-        </Button>
-      </div>
-
-      {(localError || addPhoto.isError) && (
-        <p role="alert" className="mt-3 font-satoshi text-[13px] text-color-danger">
-          {localError ?? errorMessage(addPhoto.error)}
-        </p>
-      )}
-
-      {claim.photos.length > 0 && (
-        <div className="mt-6">
-          <p className="mb-3 font-satoshi text-[12px] text-color-secondary-text">
-            Drag to reorder — the first photo leads your listing.
-          </p>
+        {claim.photos.length > 0 && (
           <PhotoGrid
             photos={claim.photos}
             onReorder={move}
@@ -156,84 +137,96 @@ export function PhotosStage({ claim, onBack, feeds, onFeedsChange }: Props) {
             busyIds={busyIds}
             disabled={removePhoto.isPending}
           />
-        </div>
-      )}
+        )}
 
-      <FeedCards feeds={feeds} onChange={onFeedsChange} />
+        {emptySlots > 0 && (
+          <ul
+            className={cn(
+              "grid grid-cols-2 gap-2.5 sm:grid-cols-3",
+              claim.photos.length > 0 && "mt-2.5",
+            )}
+          >
+            {Array.from({ length: emptySlots }, (_, offset) => (
+              <li key={offset}>
+                <button
+                  type="button"
+                  onClick={pick}
+                  disabled={addPhoto.isPending}
+                  className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-[14px] border-2 border-dashed border-color-border bg-color-background-3 px-3 text-center transition-colors hover:border-color-primary/50 hover:bg-color-secondary/25 disabled:opacity-60"
+                >
+                  <PhotoIcon />
+                  <span className="font-satoshi text-[13px] text-color-secondary-text">
+                    Photo {claim.photos.length + offset + 1} — PNG or JPG
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
-      {submit.isError && (
-        <p role="alert" className="mt-4 font-satoshi text-[13px] text-color-danger">
-          {missingPhotos
-            ? "A few things are still missing — go back and check the highlighted sections."
-            : errorMessage(submit.error)}
-        </p>
-      )}
-
-      <div className="sticky bottom-0 -mx-6 mt-6 flex gap-2.5 border-t border-color-border bg-white/95 px-6 pb-1 pt-4 backdrop-blur-sm tb:-mx-8 tb:px-8">
+      <div className="mt-4 flex flex-wrap items-center gap-3">
         <Button
           variant="secondary"
           size="responsive"
-          onClick={onBack}
-          className="h-[46px] rounded-full text-[13px] font-normal"
+          disabled={isFull || addPhoto.isPending}
+          isLoading={addPhoto.isPending}
+          onClick={pick}
+          className="h-[42px] rounded-full text-[13px] font-normal"
         >
-          Back
+          {claim.photos.length > 0 ? "Add more" : "Choose photos"}
         </Button>
+
+        <p className="font-satoshi text-[12px] text-color-secondary-text">
+          Drag to reorder — the first photo leads your listing. Up to 10 MB each ·{" "}
+          {claim.photos.length} of {PHOTO_LIMITS.maxCount} added.
+        </p>
+      </div>
+
+      {(localError || addPhoto.isError || movePhoto.isError || removePhoto.isError) && (
+        <p role="alert" className="mt-3 font-satoshi text-[13px] text-color-danger">
+          {localError ??
+            errorMessage(addPhoto.error ?? movePhoto.error ?? removePhoto.error)}
+        </p>
+      )}
+
+      <div className="sticky bottom-0 -mx-6 mt-6 flex flex-wrap items-center gap-3 border-t border-color-border bg-white/95 px-6 pb-1 pt-4 backdrop-blur-sm tb:-mx-8 tb:px-8">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 font-satoshi text-[13px] font-medium text-color-secondary-text transition-colors hover:text-color-primary"
+        >
+          <ArrowLeft size={16} /> Back
+        </button>
+
+        <div className="flex-1" />
+
         <Button
           variant="primary"
           size="responsive"
-          isLoading={submit.isPending}
-          onClick={() => submit.mutate(undefined)}
-          className="h-[46px] flex-1 rounded-full text-[13px] font-medium"
+          onClick={onContinue}
+          className="h-[48px] rounded-full px-6 text-[13px] font-medium max-tb:w-full"
         >
-          Submit for review
+          Save my profile
         </Button>
       </div>
     </StagePanel>
   );
 }
 
-/**
- * PENDING_API — Instagram and TikTok feed connection is explicitly not in v1.
- *
- * The cards are built because the design leads with them and the integration is
- * planned, but they cannot connect anything yet, and they say so rather than
- * pretending to work.
- */
-function FeedCards({
-  feeds,
-  onChange,
-}: {
-  feeds: PendingApi["feeds"];
-  onChange: (feeds: PendingApi["feeds"]) => void;
-}) {
+function PhotoIcon() {
   return (
-    <div className="mt-8 rounded-[16px] border border-color-border bg-color-background-3 p-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="font-satoshi text-[15px] font-semibold text-color-primary-text">
-          Bring your listing to life.
-        </p>
-        <span className="rounded-full bg-color-secondary px-2.5 py-0.5 font-satoshi text-[11px] font-medium text-color-primary">
-          Coming soon
-        </span>
-      </div>
-
-      <p className="mt-1.5 font-satoshi text-[13px] leading-[160%] text-color-secondary-text">
-        Connect your feeds and your newest posts show on your listing automatically —
-        guests see tonight's dishes, not last year's. No re-uploading, ever.
-      </p>
-
-      <div className="mt-4 flex flex-col gap-2.5">
-        <Switch
-          checked={feeds.instagram}
-          onChange={(checked) => onChange({ ...feeds, instagram: checked })}
-          label="Instagram — remind me when this is ready"
-        />
-        <Switch
-          checked={feeds.tiktok}
-          onChange={(checked) => onChange({ ...feeds, tiktok: checked })}
-          label="TikTok — remind me when this is ready"
-        />
-      </div>
-    </div>
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      className="size-6 text-color-disabled-text"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="3" />
+      <circle cx="8.5" cy="9.5" r="1.5" />
+      <path d="M4 17l4.5-4.5a2 2 0 0 1 2.8 0L16 17" strokeLinecap="round" />
+    </svg>
   );
 }

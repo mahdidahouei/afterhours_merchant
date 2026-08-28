@@ -4,16 +4,17 @@ import { cn } from "@/lib/cn";
 import { seedMockClaim } from "../api/mock";
 import { claimKeys } from "../api/queries";
 import type { ClaimStatus } from "../api/types";
+import { clearProgress } from "../session/progressStore";
 import { clearToken } from "../session/tokenStore";
 import type { DraftedStep } from "../stages";
 
 /**
  * A dev-only jump-to-screen panel.
  *
- * The mock already makes every button succeed, but four screens are expensive
- * to reach on foot — `scan_failed` needs a switch flipped, and submitted /
- * approved / live sit 12–22 seconds behind a submit. This seeds the mock
- * directly into any status so every screen can be looked at in one click.
+ * The mock already makes every button succeed, but several screens are
+ * expensive to reach on foot — `scan_failed` needs a switch flipped, and
+ * submitted / approved / live sit 12–22 seconds behind a submit. This seeds the
+ * mock directly into any status so every screen can be looked at in one click.
  *
  * Rendered only when the mock is the active API, so it cannot reach production:
  * `VITE_USE_MOCK` is false there and this whole component is tree-shaken out
@@ -26,6 +27,9 @@ type Target = {
   status?: ClaimStatus;
   draftedStep?: DraftedStep;
   reviewNote?: string;
+  /** Seed photos / a connected platform, so resume has something to derive from. */
+  photos?: boolean;
+  reservation?: boolean;
   hint?: string;
 };
 
@@ -33,17 +37,38 @@ const TARGETS: Target[] = [
   { label: "1 · Find", hint: "search “Oli”" },
   { label: "3 · Details", status: "verified" },
   { label: "3 · Scan failed", status: "scan_failed", hint: "error banner" },
-  { label: "4 · Scanning", status: "scanning", hint: "progress" },
-  { label: "5 · Review", status: "drafted", draftedStep: "review" },
+  { label: "4 · Building", status: "scanning", hint: "progress" },
+  { label: "4 · Build profile", status: "drafted", draftedStep: "review" },
   {
-    label: "5 · Review (sent back)",
+    label: "4 · Sent back",
     status: "drafted",
     draftedStep: "review",
     reviewNote:
       "Could you add a couple of interior photos and expand the description? It reads a little short.",
     hint: "admin note",
   },
-  { label: "6 · Photos", status: "drafted", draftedStep: "photos" },
+  { label: "5 · Photos", status: "drafted", draftedStep: "photos" },
+  {
+    label: "5 · Photos (filled)",
+    status: "drafted",
+    draftedStep: "photos",
+    photos: true,
+    hint: "4 photos",
+  },
+  {
+    label: "6 · Bookings",
+    status: "drafted",
+    draftedStep: "bookings",
+    photos: true,
+  },
+  {
+    label: "6 · Bookings (linked)",
+    status: "drafted",
+    draftedStep: "bookings",
+    photos: true,
+    reservation: true,
+    hint: "OpenTable",
+  },
   { label: "7 · Submitted", status: "submitted" },
   { label: "7 · Approved", status: "approved" },
   { label: "7 · Live", status: "live" },
@@ -65,11 +90,16 @@ export function DevStageSwitcher({ onJump }: Props) {
       // Back to the beginning: no token, no claim, no cached anything.
       clearToken();
       queryClient.removeQueries({ queryKey: claimKeys.claim });
+      clearProgress();
       onJump(undefined, false);
       return;
     }
 
-    seedMockClaim(target.status, { reviewNote: target.reviewNote });
+    seedMockClaim(target.status, {
+      reviewNote: target.reviewNote,
+      photos: target.photos,
+      reservation: target.reservation,
+    });
     queryClient.removeQueries({ queryKey: claimKeys.claim });
     onJump(target.draftedStep, true);
   };
@@ -109,8 +139,8 @@ export function DevStageSwitcher({ onJump }: Props) {
           </ul>
 
           <p className="border-t border-color-border px-3.5 py-2 font-satoshi text-[11px] leading-[150%] text-color-secondary-text">
-            Mock data · dev only. OTP <strong>000000</strong> fails, anything
-            else works.
+            Mock data · dev only. OTP <strong>000000</strong> fails, account ID{" "}
+            <strong>0</strong> is rejected; anything else works.
           </p>
         </div>
       )}

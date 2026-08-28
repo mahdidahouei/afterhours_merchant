@@ -1,13 +1,11 @@
-import { useState } from "react";
 import { ArrowLeft } from "iconsax-reactjs";
-import { cn } from "@/lib/cn";
 import { errorMessage, isProblem } from "@/lib/errors";
 import { Button } from "@/ui/Button";
-import { TextField } from "@/ui/TextField";
 import CallIcon from "@/assets/icons/call.svg?react";
 import { useSendVerification } from "../api/queries";
 import type { PlaceCandidate, Verification } from "../api/types";
 import { StageHeading, StagePanel } from "../components/ClaimLayout";
+import { ManualReview } from "../components/ManualReview";
 
 type Props = {
   candidate: PlaceCandidate;
@@ -15,42 +13,29 @@ type Props = {
   onSent: (verification: Verification, target: string) => void;
 };
 
-type Choice = "listed" | "custom";
-
 /**
  * Prove ownership by receiving a text on the number the listing already carries.
  *
- * The "different number" path exists because listings go stale, but the server
- * still checks any number given against the listing — an owner cannot redirect
- * the code somewhere new. A mismatch comes back as `no_phone_on_listing`.
+ * There is deliberately no "use a different number" option: `POST /verifications`
+ * takes a `placeId` and nothing else, so the code can only ever go to the
+ * listing's own number. That is the point — an owner who could redirect it
+ * wouldn't be proving anything. Anyone who can't receive that text goes through
+ * `ManualReview` instead.
  */
 export function VerifyOwnershipStage({ candidate, onBack, onSent }: Props) {
-  const canUseListed = candidate.phoneMasked !== null;
-  const [choice, setChoice] = useState<Choice>(canUseListed ? "listed" : "custom");
-  const [phone, setPhone] = useState("");
-
   const send = useSendVerification();
+  const canText = candidate.phoneMasked !== null;
 
   const submit = () => {
-    if (choice === "custom" && !phone.trim()) return;
     send.reset();
-
     send.mutate(
-      {
-        placeId: candidate.placeId,
-        ...(choice === "custom" ? { phone: phone.trim() } : {}),
-      },
-      {
-        onSuccess: (verification) =>
-          onSent(
-            verification,
-            choice === "custom" ? phone.trim() : verification.phoneMasked,
-          ),
-      },
+      { placeId: candidate.placeId },
+      { onSuccess: (verification) => onSent(verification, verification.phoneMasked) },
     );
   };
 
-  const mismatch = isProblem(send.error, "no_phone_on_listing");
+  const noPhone = isProblem(send.error, "no_phone_on_listing");
+  const taken = isProblem(send.error, "place_already_claimed");
 
   return (
     <StagePanel>
@@ -68,129 +53,65 @@ export function VerifyOwnershipStage({ candidate, onBack, onSent }: Props) {
         Only the owner can complete this step.
       </StageHeading>
 
-      <div className="flex flex-col gap-3">
-        {canUseListed && (
-          <ChoiceCard
-            selected={choice === "listed"}
-            onSelect={() => setChoice("listed")}
-            title="Phone on file"
-            subtitle={candidate.phoneMasked!}
-            hint="Yes, this is my number"
-          />
-        )}
-
-        <ChoiceCard
-          selected={choice === "custom"}
-          onSelect={() => setChoice("custom")}
-          title="I use a different number"
-          subtitle="We'll check it against the listing"
-        >
-          {choice === "custom" && (
-            <div className="mt-3.5">
-              <TextField
-                size="responsive"
-                placeholder="Your phone number"
-                icon={<CallIcon />}
-                inputMode="tel"
-                autoComplete="tel"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                errorMessage={mismatch ? " " : undefined}
-                hideErrorMessage
-              />
-            </div>
-          )}
-        </ChoiceCard>
-      </div>
+      {canText ? (
+        <div className="flex items-center gap-3.5 rounded-[16px] bg-color-secondary/40 px-4 py-3.5">
+          <span
+            aria-hidden
+            className="grid size-10 shrink-0 place-content-center rounded-full bg-white text-color-primary"
+          >
+            <CallIcon />
+          </span>
+          <span>
+            <span className="block font-satoshi text-[11px] font-semibold uppercase tracking-[0.12em] text-color-secondary-text">
+              Number on file
+            </span>
+            <span className="mt-0.5 block font-lora text-[20px] font-medium tracking-[0.03em] text-color-primary-text">
+              {candidate.phoneMasked}
+            </span>
+          </span>
+        </div>
+      ) : (
+        <div className="rounded-[16px] border border-color-border bg-color-background-3 p-4">
+          <p className="font-satoshi text-[14px] font-semibold text-color-primary-text">
+            This listing has no phone number.
+          </p>
+          <p className="mt-1 font-satoshi text-[13px] leading-[160%] text-color-secondary-text">
+            There's nothing for us to text, so we'll verify you another way. Request a
+            manual review below and we'll take it from there.
+          </p>
+        </div>
+      )}
 
       {send.isError && (
         <p role="alert" className="mt-3.5 font-satoshi text-[13px] text-color-danger">
-          {mismatch
-            ? "This number doesn't match the listing. Use the number on file, or contact us to update it first."
-            : errorMessage(send.error)}
+          {taken
+            ? "This restaurant has already been claimed. If that wasn't you, request a manual review below."
+            : noPhone
+              ? "There's no number on this listing to text. Request a manual review below."
+              : errorMessage(send.error)}
         </p>
       )}
 
-      <Button
-        variant="primary"
-        size="responsive"
-        isLoading={send.isPending}
-        disabled={send.isPending || (choice === "custom" && !phone.trim())}
-        onClick={submit}
-        className="mt-6 h-[50px] w-full rounded-full text-[13px] font-medium"
-      >
-        {choice === "listed" && canUseListed
-          ? `Send the code to ${candidate.phoneMasked}`
-          : "Text me the code"}
-      </Button>
+      {canText && (
+        <>
+          <Button
+            variant="primary"
+            size="responsive"
+            isLoading={send.isPending}
+            disabled={send.isPending}
+            onClick={submit}
+            className="mt-5 h-[52px] w-full rounded-full text-[14px] font-medium"
+          >
+            Text me the code
+          </Button>
 
-      <p className="mt-3.5 text-center font-satoshi text-[12px] text-color-secondary-text">
-        Your number is only used for verification. We never share it.
-      </p>
-    </StagePanel>
-  );
-}
-
-function ChoiceCard({
-  selected,
-  onSelect,
-  title,
-  subtitle,
-  hint,
-  children,
-}: {
-  selected: boolean;
-  onSelect: () => void;
-  title: string;
-  subtitle: string;
-  hint?: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-[16px] border p-4 transition-colors",
-        selected
-          ? "border-color-primary bg-color-secondary/30"
-          : "border-color-border bg-white hover:border-color-primary/40",
+          <p className="mt-3.5 text-center font-satoshi text-[12px] text-color-secondary-text">
+            Your number is only used for verification. We never share it.
+          </p>
+        </>
       )}
-    >
-      <label className="flex cursor-pointer items-start gap-3">
-        <input
-          type="radio"
-          name="verification-number"
-          checked={selected}
-          onChange={onSelect}
-          className="peer sr-only"
-        />
 
-        <span
-          aria-hidden
-          className={cn(
-            "mt-0.5 grid size-[18px] shrink-0 place-content-center rounded-full border-2 transition-colors",
-            "peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2",
-            selected ? "border-color-primary" : "border-color-border",
-          )}
-        >
-          {selected && <span className="size-2 rounded-full bg-color-primary" />}
-        </span>
-
-        <span className="min-w-0 flex-1">
-          <span className="block font-satoshi text-[13px] font-medium text-color-secondary-text">
-            {title}
-          </span>
-          <span className="mt-0.5 block font-satoshi text-[15px] font-semibold text-color-primary-text">
-            {subtitle}
-          </span>
-          {hint && (
-            <span className="mt-0.5 block font-satoshi text-[12px] text-color-secondary-text">
-              {hint}
-            </span>
-          )}
-        </span>
-      </label>
-
-      {children}
-    </div>
+      <ManualReview candidate={candidate} />
+    </StagePanel>
   );
 }

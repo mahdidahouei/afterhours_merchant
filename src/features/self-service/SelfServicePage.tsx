@@ -7,6 +7,7 @@ import { Toast } from "@/ui/Toast";
 import { isMockApi, ownerApi } from "./api";
 import { claimKeys, useClaim } from "./api/queries";
 import type {
+  Claim,
   ClaimStatus,
   PendingApi,
   PlaceCandidate,
@@ -17,15 +18,18 @@ import { EMPTY_PENDING_API } from "./api/types";
 import { ClaimLayout } from "./components/ClaimLayout";
 import { DevStageSwitcher } from "./components/DevStageSwitcher";
 import type { Language } from "./stages/Review/MenusSection";
+import { clearProgress, readProgress, writeProgress } from "./session/progressStore";
 import { clearToken, readToken, writeToken } from "./session/tokenStore";
 import {
   journeyIndexOf,
+  resumeStep,
   stageForStatus,
   STAGE_LABEL,
   type AnonStage,
   type DraftedStep,
   type Stage,
 } from "./stages";
+import { BookingsStage } from "./stages/Bookings";
 import { DetailsStage } from "./stages/DetailsStage";
 import { FindStage } from "./stages/FindStage";
 import { OtpStage } from "./stages/OtpStage";
@@ -52,9 +56,12 @@ const MILESTONES: Partial<Record<ClaimStatus, { title: string; description: stri
  * The claim flow.
  *
  * Two phases. Before a token exists the page owns the stage; after it, the
- * screen is a pure function of `claim.status` — which is the contract's central
- * rule, and the reason there is no stage state to get out of sync with the
- * server.
+ * screen is a function of `claim.status` — which is the contract's central rule,
+ * and the reason there is no stage state to get out of sync with the server.
+ *
+ * The one exception is `drafted`, which covers build, photos and bookings. The
+ * API has no field distinguishing them, so `draftedStep` lives here and is
+ * seeded once per claim by `resumeStep`.
  */
 export default function SelfServicePage() {
   const queryClient = useQueryClient();
@@ -65,7 +72,7 @@ export default function SelfServicePage() {
   const [verification, setVerification] = useState<Verification | null>(null);
   const [otpTarget, setOtpTarget] = useState("");
 
-  /* Phase B — `drafted` covers two screens, so the page picks between them. */
+  /* Phase B — which of the three `drafted` screens is showing. */
   const [draftedStep, setDraftedStep] = useState<DraftedStep>("review");
 
   /** Controls the design draws that have no endpoint yet. */
@@ -74,14 +81,25 @@ export default function SelfServicePage() {
   const [hasToken, setHasToken] = useState(() => Boolean(readToken()));
   const claim = useClaim();
 
+  /** Which claim `useResume` has already positioned. See the hook. */
+  const resumedFor = useRef<string | null>(null);
+  /** Set when something else has already chosen the step for the next claim. */
+  const skipResume = useRef(false);
+
   /** Dev-only: seed the mock into a status and render that screen. */
   const jumpToScreen = useCallback(
     (step: DraftedStep | undefined, seeded: boolean) => {
+      // Seeding mints a fresh claimId, which would otherwise look to `useResume`
+      // like a new claim to position — and it would derive its own step and
+      // overwrite the one just asked for. The switcher wins.
+      resumedFor.current = null;
+      skipResume.current = Boolean(step);
       if (step) setDraftedStep(step);
       if (!seeded) {
         setCandidate(null);
         setVerification(null);
         setAnonStage("search");
+        clearProgress();
       }
       setHasToken(seeded);
       void claim.refetch();
@@ -101,14 +119,17 @@ export default function SelfServicePage() {
     }
   }, [claim.error, candidate]);
 
-  const status = claim.data?.status;
+  useResume(claim.data, setDraftedStep, resumedFor, skipResume);
 
+  const status = claim.data?.status;
   const stage: Stage = hasToken && status ? stageForStatus(status, draftedStep) : anonStage;
 
-  /* When a scan finishes, land on review rather than wherever we last were. */
+  /* Remember how far they got, so leaving mid-flow returns them here. */
   useEffect(() => {
-    if (status === "drafted") setDraftedStep((step) => (step === "photos" ? step : "review"));
-  }, [status]);
+    if (claim.data?.status === "drafted") {
+      writeProgress(claim.data.claimId, draftedStep);
+    }
+  }, [claim.data?.status, claim.data?.claimId, draftedStep]);
 
   const milestone = useMilestone(status);
 
@@ -124,6 +145,7 @@ export default function SelfServicePage() {
   const restart = useCallback(async () => {
     await ownerApi.endSession().catch(() => null);
     clearToken();
+    clearProgress();
     queryClient.removeQueries({ queryKey: claimKeys.claim });
     setHasToken(false);
     setCandidate(null);
@@ -162,11 +184,6 @@ export default function SelfServicePage() {
           onSelect={(selected) => {
             setCandidate(selected);
             setAnonStage("verifyOwnership");
-          }}
-          onRequestListing={() => {
-            // The listing-request form is its own small flow; until it exists,
-            // support handles it through the contact page.
-            window.location.assign("/contact-us");
           }}
         />
       )}
@@ -222,9 +239,12 @@ export default function SelfServicePage() {
             <PhotosStage
               claim={claim.data}
               onBack={() => setDraftedStep("review")}
-              feeds={pendingApi.feeds}
-              onFeedsChange={(feeds) => setPendingApi((prev) => ({ ...prev, feeds }))}
+              onContinue={() => setDraftedStep("bookings")}
             />
+          )}
+
+          {stage === "bookings" && (
+            <BookingsStage claim={claim.data} onBack={() => setDraftedStep("photos")} />
           )}
 
           {(stage === "submitted" || stage === "approved" || stage === "live") && (
@@ -234,6 +254,34 @@ export default function SelfServicePage() {
       )}
     </ClaimLayout>
   );
+}
+
+/**
+ * Put a returning owner back where they stopped.
+ *
+ * Runs once per claim, on the first `drafted` payload this page sees. After
+ * that the owner's own Back and Continue own the position — re-deriving on
+ * every poll would yank them forward the moment a photo finished uploading.
+ */
+function useResume(
+  claim: Claim | undefined,
+  setDraftedStep: (step: DraftedStep) => void,
+  resumedFor: React.MutableRefObject<string | null>,
+  skipResume: React.MutableRefObject<boolean>,
+) {
+  useEffect(() => {
+    if (!claim || claim.status !== "drafted") return;
+    if (resumedFor.current === claim.claimId) return;
+
+    resumedFor.current = claim.claimId;
+
+    if (skipResume.current) {
+      skipResume.current = false;
+      return;
+    }
+
+    setDraftedStep(resumeStep(claim, readProgress(claim.claimId)));
+  }, [claim, setDraftedStep, resumedFor, skipResume]);
 }
 
 /**

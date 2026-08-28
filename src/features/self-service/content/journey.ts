@@ -1,9 +1,15 @@
 /**
- * The five journey steps shown in the rail. These are the owner's mental model
- * of the flow — deliberately coarser than the eight screens and seven statuses
+ * The six journey steps shown in the rail. These are the owner's mental model
+ * of the flow — deliberately coarser than the nine screens and seven statuses
  * underneath them.
  */
-export type JourneyStepId = "find" | "verify" | "details" | "review" | "photos";
+export type JourneyStepId =
+  | "find"
+  | "verify"
+  | "details"
+  | "review"
+  | "photos"
+  | "bookings";
 
 export type JourneyStep = {
   id: JourneyStepId;
@@ -21,6 +27,7 @@ export const JOURNEY: JourneyStep[] = [
   { id: "details", title: "Check your details", hint: "Name, address, website", short: "Details" },
   { id: "review", title: "Build your profile", hint: "Story, contact & menus", short: "Review" },
   { id: "photos", title: "Add your photos", hint: "Interior, atmosphere & food", short: "Photos" },
+  { id: "bookings", title: "Connect bookings", hint: "Realtime availability", short: "Bookings" },
 ];
 
 export const RAIL_FOOTNOTE =

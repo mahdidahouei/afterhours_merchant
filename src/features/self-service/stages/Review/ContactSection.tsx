@@ -175,7 +175,7 @@ export function ContactSection({
               {draft.reservationPlatforms.length > 1 && (
                 <p className="mt-2.5 font-satoshi text-[12px] text-color-secondary-text">
                   Tap the star to flag your primary booking platform.{" "}
-                  <span className="text-color-secondary-text/80">
+                  <span className="text-color-secondary-text">
                     Not saved yet — coming with the next API release.
                   </span>
                 </p>
