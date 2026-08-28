@@ -18,8 +18,9 @@ import { EXTERNAL_LINKS, ROUTES } from "../content/links";
 const CTA_TEXT = "Start Getting Reservations";
 
 export function Header() {
-  // Transparent and roomy at rest; a compact frosted bar once scrolled.
-  const { pinned, height, wrapperRef, headerRef } = useHeaderPin(100);
+  // Transparent and roomy at rest; a compact frosted bar from the first scroll
+  // onwards. One-way, exactly like the Headroom setup it replaces — see the hook.
+  const { pinned, height, wrapperRef, headerRef } = useHeaderPin();
 
   return (
     <div ref={wrapperRef} style={{ height: height || undefined, zIndex: 20 }}>
@@ -29,7 +30,8 @@ export function Header() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
         className={cn(
-          "flex w-full items-center justify-between bg-transparent transition-[background-color,padding]",
+          "flex w-full items-center justify-between bg-transparent",
+          "transition-[background-color,padding] duration-200 ease-in-out",
           pinned
             ? "fixed inset-x-0 top-0 z-20 bg-white/25 px-8 py-5 backdrop-blur-[6px]"
             : "relative pt-10 max-tb:px-7",
