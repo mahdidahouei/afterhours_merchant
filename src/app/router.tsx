@@ -7,7 +7,7 @@ import {
 } from "react-router-dom";
 import { ErrorBoundary } from "@/ui/ErrorBoundary";
 import { trackPageView } from "./analytics";
-import { ServiceWorkerPrompt } from "./ServiceWorkerPrompt";
+import { ServiceWorkerUpdater } from "./ServiceWorkerUpdater";
 import ErrorPage from "@/features/errors/ErrorPage";
 import RouteErrorPage from "@/features/errors/RouteErrorPage";
 
@@ -39,7 +39,7 @@ function RootLayout() {
         </Suspense>
       </ErrorBoundary>
 
-      <ServiceWorkerPrompt />
+      <ServiceWorkerUpdater />
     </>
   );
 }

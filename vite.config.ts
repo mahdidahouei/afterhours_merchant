@@ -50,11 +50,22 @@ export default defineConfig({
     svgr(),
 
     VitePWA({
-      // "prompt" over "autoUpdate": a silent swap can replace lazy chunks
-      // mid-session and blank a section the user is mid-scroll through. The
-      // app shows an unobtrusive "new version" bar instead — see
-      // src/app/ServiceWorkerPrompt.tsx.
+      // A new build installs and activates on its own — there is no "a new
+      // version is available" bar, and nobody stays on a stale build because
+      // they never pressed it. `skipWaiting` below is what makes that happen.
+      //
+      // "prompt" here does NOT mean the user is prompted; with no waiting
+      // worker there is nothing to prompt about. It means *this app* decides
+      // what to do on update, and what it decides is: nothing visible.
+      // "autoUpdate" would reload the open tab the moment the worker activates,
+      // which on /claim would throw away a half-filled form — measured, not
+      // assumed. Instead the new build is simply what the next load gets.
+      //
+      // The one case that still needs handling is an old tab asking for a lazy
+      // chunk the deploy deleted; see src/app/reloadOnStaleChunk.ts.
       registerType: "prompt",
+      // Registration is ours (src/app/ServiceWorkerUpdater.tsx) rather than an
+      // injected script, so the hourly update check has somewhere to live.
       injectRegister: null,
 
       devOptions: { enabled: false, type: "module" },
@@ -70,8 +81,11 @@ export default defineConfig({
         navigateFallbackDenylist: [/config\.js$/],
 
         cleanupOutdatedCaches: true,
+        // Take over immediately rather than waiting for every tab to close.
+        // Without skipWaiting a new build can sit dormant for days behind one
+        // pinned tab, which is exactly the staleness this is meant to end.
         clientsClaim: true,
-        skipWaiting: false, // the prompt decides when to activate
+        skipWaiting: true,
 
         // 26 MB of hero video must never be pulled into the precache manifest.
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,

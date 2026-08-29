@@ -184,8 +184,24 @@ has landed — IG/TikTok are real OAuth, bookings are a real integration.
 
 ## Service worker
 
-`registerType: "prompt"`, not `autoUpdate` — a silent swap can replace a lazy
-chunk mid-scroll. `ServiceWorkerPrompt` shows a reload bar instead.
+**A new build takes over by itself.** `skipWaiting` + `clientsClaim` mean it
+installs, activates and claims open tabs without asking, so the next load is
+always the new one. There is no update bar and nothing to press.
+
+`registerType: "prompt"` is still set, and does *not* mean the user is prompted:
+with no waiting worker there is nothing to prompt about. It means this app
+decides what happens on update, and it decides to do nothing visible.
+`"autoUpdate"` reloads the open tab the instant the worker activates — measured,
+not assumed — which on `/claim` would throw away a half-filled form.
+
+That leaves one hazard, and it is not the worker's fault: a tab open across a
+deploy can ask for a lazy chunk whose hashed filename no longer exists on the
+server. `src/app/reloadOnStaleChunk.ts` listens for Vite's `vite:preloadError`
+and reloads once per minute per tab. Don't remove it while routes are lazy.
+
+`ServiceWorkerUpdater` is what registers the worker (`injectRegister: null`
+means nothing else does) and holds the hourly `registration.update()` — that
+poll is what makes a pinned tab's next reload land on the new build.
 
 Runtime caching rules live in `vite.config.ts`. Two must not change: **`.mp4` is
 `NetworkOnly`** (range requests break under CacheFirst and the clips total

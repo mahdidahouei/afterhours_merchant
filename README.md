@@ -134,6 +134,19 @@ Only two things are stored in the browser: the bearer token for the current
 session, and — in development only — the mock's own claim, which stands in for
 the server's database.
 
+## Updates
+
+The service worker installs a new build, activates it and claims open tabs on
+its own — there is no "a new version is available" bar, and no way for someone
+to sit on a stale build because they never pressed it. The next load after a
+deploy is the new version.
+
+An already-open tab is deliberately *not* reloaded out from under whoever is
+using it; that would discard a half-filled form on `/claim`. It keeps running
+the build it started with until it next loads — except when it asks for a lazy
+chunk the deploy has deleted, which reloads it automatically rather than
+blanking the section.
+
 ## Configuration
 
 `public/config.js` sets `window.__ENV__` before the app bundle parses:
