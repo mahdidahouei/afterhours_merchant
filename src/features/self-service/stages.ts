@@ -1,4 +1,4 @@
-import type { Claim, ClaimStatus } from "./api/types";
+import type { ClaimStatus } from "./api/types";
 import type { JourneyStepId } from "./content/journey";
 import { JOURNEY } from "./content/journey";
 
@@ -30,7 +30,7 @@ export type AnonStage = Extract<Stage, "search" | "verifyOwnership" | "otp">;
  *
  * This is the one place the contract leaves a gap: `status` has a single value
  * for the whole of the owner's editing work, so it cannot say which screen they
- * were on. See `resumeStep` for how it is recovered.
+ * were on. The gap is not filled in by the client — see `FIRST_DRAFTED_STEP`.
  *
  * `details` is in here as well as being what `verified` maps to. The listing
  * facts stay editable after the profile is drafted — `PATCH /claim/place`
@@ -45,6 +45,19 @@ export const DRAFTED_ORDER: DraftedStep[] = [
   "photos",
   "bookings",
 ];
+
+/**
+ * Where `drafted` starts.
+ *
+ * `status` is the only thing the API says about progress, and it has one value
+ * for all four editing screens — so a returning owner lands here, whichever of
+ * them they were last on. Deriving it from photo counts, or remembering it in
+ * this browser, would be the client inventing a fact the server never stated.
+ *
+ * When `Claim` grows a step field this becomes a fallback for claims that
+ * predate it, and `SelfServicePage` seeds `draftedStep` from the response.
+ */
+export const FIRST_DRAFTED_STEP: DraftedStep = "review";
 
 export function stageForStatus(status: ClaimStatus, draftedStep: DraftedStep): Stage {
   switch (status) {
@@ -63,30 +76,6 @@ export function stageForStatus(status: ClaimStatus, draftedStep: DraftedStep): S
     case "live":
       return "live";
   }
-}
-
-/**
- * Where a returning owner picks up.
- *
- * Derived from what the claim actually holds, because the API has no field for
- * it: a connected platform means they reached bookings, a photo means they
- * reached photos, otherwise they were still building the profile. `furthest` is
- * the client's own note of the last step reached, which covers the case the
- * derivation cannot — arriving on a step and leaving without doing anything on
- * it. Whichever is further along wins, so a resume never goes backwards.
- *
- * `details` is never a resume target. It is somewhere the owner chooses to go
- * back to, not somewhere they can be left stranded: once a profile exists, the
- * work continues at `review`.
- */
-export function resumeStep(claim: Claim, furthest?: DraftedStep | null): DraftedStep {
-  const derived: DraftedStep =
-    claim.reservation.length > 0 ? "bookings" : claim.photos.length > 0 ? "photos" : "review";
-
-  if (!furthest || furthest === "details") return derived;
-  return DRAFTED_ORDER.indexOf(furthest) > DRAFTED_ORDER.indexOf(derived)
-    ? furthest
-    : derived;
 }
 
 /**

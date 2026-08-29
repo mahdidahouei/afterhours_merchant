@@ -250,7 +250,22 @@ function restore(): Claim | null {
   }
 }
 
-claim = restore();
+/**
+ * Load the stored claim on first use, not at import.
+ *
+ * A top-level `claim = restore()` is a module side effect, which stops Rollup
+ * dropping this file from a production build even when `VITE_USE_MOCK` is
+ * false — the seed data gets tree-shaken but the storage helpers ship, and run
+ * a localStorage read on every page load. Deferring it keeps the whole module
+ * droppable.
+ */
+let isLoaded = false;
+
+function ensureLoaded() {
+  if (isLoaded) return;
+  isLoaded = true;
+  claim = restore();
+}
 
 export function setMockScanFailure(shouldFail: boolean) {
   scanShouldFail = shouldFail;
@@ -308,6 +323,7 @@ export async function seedMockClaim(
   status: ClaimStatus,
   options?: { reviewNote?: string; photos?: boolean; reservation?: boolean },
 ) {
+  ensureLoaded();
   claim = makeClaim("pl_oli_mazi");
   claim.status = status;
 
@@ -389,6 +405,8 @@ function settleScan() {
 }
 
 function requireClaim(...legal: ClaimStatus[]): Claim {
+  ensureLoaded();
+
   if (!readToken() || !claim) {
     return fail("session_expired", { status: 401 });
   }
@@ -490,6 +508,7 @@ export const mockOwnerApi: OwnerApi = {
 
   async createSession({ verificationId, code }) {
     await wait();
+    ensureLoaded();
 
     if (!pending || pending.verificationId !== verificationId) {
       return fail("not_found", { status: 404 });
@@ -528,6 +547,7 @@ export const mockOwnerApi: OwnerApi = {
 
   async getSessionInfo() {
     await wait(160);
+    ensureLoaded();
     if (!readToken() || !claim) return fail("session_expired", { status: 401 });
     return {
       claimId: claim.claimId,
@@ -538,6 +558,7 @@ export const mockOwnerApi: OwnerApi = {
 
   async endSession() {
     await wait(160);
+    ensureLoaded();
     clearToken();
     claim = null;
     persist();

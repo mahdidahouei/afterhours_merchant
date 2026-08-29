@@ -7,7 +7,6 @@ import { Toast } from "@/ui/Toast";
 import { isMockApi, ownerApi } from "./api";
 import { claimKeys, useClaim } from "./api/queries";
 import type {
-  Claim,
   ClaimStatus,
   PendingApi,
   PlaceCandidate,
@@ -19,13 +18,12 @@ import { ClaimLayout } from "./components/ClaimLayout";
 import { DevStageSwitcher } from "./components/DevStageSwitcher";
 import type { Language } from "./stages/Review/MenusSection";
 import type { LeaveGuard } from "./session/leaveGuard";
-import { clearProgress, readProgress, writeProgress } from "./session/progressStore";
-import { clearToken, readToken, writeToken } from "./session/tokenStore";
+import { clearToken, writeToken } from "./session/tokenStore";
 import {
   draftedStepAt,
+  FIRST_DRAFTED_STEP,
   journeyIndexOf,
   reachableSteps,
-  resumeStep,
   stageForStatus,
   STAGE_LABEL,
   type AnonStage,
@@ -62,9 +60,16 @@ const MILESTONES: Partial<Record<ClaimStatus, { title: string; description: stri
  * screen is a function of `claim.status` — which is the contract's central rule,
  * and the reason there is no stage state to get out of sync with the server.
  *
- * The one exception is `drafted`, which covers build, photos and bookings. The
- * API has no field distinguishing them, so `draftedStep` lives here and is
- * seeded once per claim by `resumeStep`.
+ * Every visit starts at the search box. A session is something you establish by
+ * verifying, here, now — not something a previous visit left in this browser —
+ * so any stored token is dropped on arrival. Where an owner lands afterwards is
+ * decided entirely by the `status` on the claim that `POST /sessions` returns.
+ *
+ * `drafted` covers four screens and the contract has no field naming which, so a
+ * returning owner lands on the first of them. Guessing from photo counts, or
+ * remembering the answer in this browser, would both be the client inventing
+ * something the server never said. When `Claim` grows a step field, seed
+ * `draftedStep` from it and that limitation goes away.
  */
 export default function SelfServicePage() {
   const queryClient = useQueryClient();
@@ -75,36 +80,44 @@ export default function SelfServicePage() {
   const [verification, setVerification] = useState<Verification | null>(null);
   const [otpTarget, setOtpTarget] = useState("");
 
-  /* Phase B — which of the three `drafted` screens is showing. */
-  const [draftedStep, setDraftedStep] = useState<DraftedStep>("review");
+  /* Phase B — which of the four `drafted` screens is showing. Session-only: the
+     rail and the Back buttons move it, and nothing persists it. */
+  const [draftedStep, setDraftedStep] = useState<DraftedStep>(FIRST_DRAFTED_STEP);
 
   /** Controls the design draws that have no endpoint yet. */
   const [pendingApi, setPendingApi] = useState<PendingApi>(EMPTY_PENDING_API);
 
-  const [hasToken, setHasToken] = useState(() => Boolean(readToken()));
+  /**
+   * Whether a session was established *in this visit*.
+   *
+   * The initialiser drops any token a previous visit left behind, and it does so
+   * here rather than in an effect because `useClaim` reads the token during
+   * render — an effect would run one render too late and let an authenticated
+   * request escape for a session we are about to discard.
+   */
+  const [hasToken, setHasToken] = useState(() => {
+    clearToken();
+    return false;
+  });
+
   const claim = useClaim();
 
-  /** Which claim `useResume` has already positioned. See the hook. */
-  const resumedFor = useRef<string | null>(null);
-  /** Set when something else has already chosen the step for the next claim. */
-  const skipResume = useRef(false);
   /** The current screen's chance to save before the rail navigates away. */
   const leaveGuard = useRef<LeaveGuard | null>(null);
+
+  /* The query client outlives a route change, so drop the previous claim too. */
+  useEffect(() => {
+    queryClient.removeQueries({ queryKey: claimKeys.claim });
+  }, [queryClient]);
 
   /** Dev-only: seed the mock into a status and render that screen. */
   const jumpToScreen = useCallback(
     (step: DraftedStep | undefined, seeded: boolean) => {
-      // Seeding mints a fresh claimId, which would otherwise look to `useResume`
-      // like a new claim to position — and it would derive its own step and
-      // overwrite the one just asked for. The switcher wins.
-      resumedFor.current = null;
-      skipResume.current = Boolean(step);
       if (step) setDraftedStep(step);
       if (!seeded) {
         setCandidate(null);
         setVerification(null);
         setAnonStage("search");
-        clearProgress();
       }
       setHasToken(seeded);
       void claim.refetch();
@@ -124,18 +137,9 @@ export default function SelfServicePage() {
     }
   }, [claim.error, candidate]);
 
-  useResume(claim.data, setDraftedStep, resumedFor, skipResume);
-
   const status = claim.data?.status;
   const stage: Stage =
     hasToken && status ? stageForStatus(status, draftedStep) : anonStage;
-
-  /* Remember how far they got, so leaving mid-flow returns them here. */
-  useEffect(() => {
-    if (claim.data?.status === "drafted") {
-      writeProgress(claim.data.claimId, draftedStep);
-    }
-  }, [claim.data?.status, claim.data?.claimId, draftedStep]);
 
   const milestone = useMilestone(status);
 
@@ -151,23 +155,18 @@ export default function SelfServicePage() {
   const restart = useCallback(async () => {
     await ownerApi.endSession().catch(() => null);
     clearToken();
-    clearProgress();
     queryClient.removeQueries({ queryKey: claimKeys.claim });
     setHasToken(false);
     setCandidate(null);
     setVerification(null);
     setAnonStage("search");
-    setDraftedStep("review");
+    setDraftedStep(FIRST_DRAFTED_STEP);
     setPendingApi(EMPTY_PENDING_API);
   }, [queryClient]);
 
   const activeIndex = journeyIndexOf(stage);
 
-  /**
-   * Going back to an earlier step is navigation, not a resume — so it must not
-   * be undone by `useResume` on the next poll, and it must not rewind the
-   * furthest-reached note (`writeProgress` only ever moves forward).
-   */
+  /** Move to another step of the drafted phase, saving the current one first. */
   const goToStep = useCallback(async (index: number) => {
     const step = draftedStepAt(index);
     if (!step) return;
@@ -298,38 +297,11 @@ export default function SelfServicePage() {
 }
 
 /**
- * Put a returning owner back where they stopped.
- *
- * Runs once per claim, on the first `drafted` payload this page sees. After
- * that the owner's own Back and Continue own the position — re-deriving on
- * every poll would yank them forward the moment a photo finished uploading.
- */
-function useResume(
-  claim: Claim | undefined,
-  setDraftedStep: (step: DraftedStep) => void,
-  resumedFor: React.MutableRefObject<string | null>,
-  skipResume: React.MutableRefObject<boolean>,
-) {
-  useEffect(() => {
-    if (!claim || claim.status !== "drafted") return;
-    if (resumedFor.current === claim.claimId) return;
-
-    resumedFor.current = claim.claimId;
-
-    if (skipResume.current) {
-      skipResume.current = false;
-      return;
-    }
-
-    setDraftedStep(resumeStep(claim, readProgress(claim.claimId)));
-  }, [claim, setDraftedStep, resumedFor, skipResume]);
-}
-
-/**
  * Show a milestone toast the first time a status is reached.
  *
- * Keyed on status rather than on a mutation succeeding, so a resumed session
- * doesn't replay congratulations for work done yesterday.
+ * Keyed on status rather than on a mutation succeeding, so an owner returning to
+ * a claim already past that point doesn't replay congratulations for work done
+ * yesterday.
  */
 function useMilestone(status: ClaimStatus | undefined) {
   const [isOpen, setIsOpen] = useState(false);
@@ -342,7 +314,7 @@ function useMilestone(status: ClaimStatus | undefined) {
   useEffect(() => {
     if (!status) return;
 
-    // A resumed session arrives mid-flow; that is not a milestone.
+    // A session that reopens mid-flow arrives already past these; not a milestone.
     if (isFirstRender.current) {
       isFirstRender.current = false;
       seen.current.add(status);

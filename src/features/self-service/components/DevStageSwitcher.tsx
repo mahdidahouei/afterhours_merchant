@@ -4,7 +4,6 @@ import { cn } from "@/lib/cn";
 import { seedMockClaim } from "../api/mock";
 import { claimKeys } from "../api/queries";
 import type { ClaimStatus } from "../api/types";
-import { clearProgress } from "../session/progressStore";
 import { clearToken } from "../session/tokenStore";
 import type { DraftedStep } from "../stages";
 
@@ -97,7 +96,6 @@ export function DevStageSwitcher({ onJump }: Props) {
       // Back to the beginning: no token, no claim, no cached anything.
       clearToken();
       queryClient.removeQueries({ queryKey: claimKeys.claim });
-      clearProgress();
       onJump(undefined, false);
       return;
     }

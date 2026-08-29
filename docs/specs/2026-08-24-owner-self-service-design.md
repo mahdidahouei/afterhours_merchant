@@ -41,29 +41,27 @@ The contract's status table requires two screens the design does not draw:
 `submitted` ("With our team") and `approved` ("Almost there"). Both are built in
 the same visual language as stage 7.
 
-### Resume
+### Coming back
 
-A stored token means `GET /claim`, then render from status. `401
-session_expired` drops the token and returns to verification — the claim
-survives, and re-verifying the same number picks it back up.
+Every visit starts at the search box. Any token a previous visit left behind is
+dropped on arrival, so a session is only ever something established by verifying
+here and now. `401 session_expired` mid-flow does the same and returns the owner
+to verification — the claim itself survives on the server.
 
-Status alone is not enough to land on the right screen. `drafted` covers three
-of them, and the contract has no field naming which. Two sources are combined:
+After verification the claim comes back on `POST /sessions` and its `status`
+picks the screen. That covers six of the seven statuses exactly.
 
-1. **Derived from the claim.** `reservation.length > 0` means they reached
-   bookings; `photos.length > 0` means they reached photos; otherwise build.
-   This is authoritative and survives a new device.
-2. **A note in localStorage**, keyed by `claimId`, of the furthest step this
-   browser reached. It covers the one case the derivation cannot see — opening
-   a step and leaving without doing anything on it — and is allowed to be lost.
+The seventh, `drafted`, is one status across four screens (details, build,
+photos, bookings) and the contract has no field naming which. **The client does
+not fill that gap.** A returning owner lands on Build your profile and walks
+forward; every step stays reachable from the rail, so nothing is unreachable and
+nothing is lost.
 
-Whichever is further along wins, so a resume never moves backwards. The seed
-runs once per claim, not per render: re-deriving continuously would move the
-owner forward the moment a photo finished uploading.
-
-**Ask the backend for a `currentStep` on `Claim`** and both halves collapse into
-reading a field. Until then, `session/progressStore.ts` is the whole workaround
-and is documented as disposable.
+Two approaches were built and removed: deriving the step from what the claim
+holds (a connected platform implies bookings), and a `claimId`-keyed note in
+`localStorage`. Both invent progress the server never reported, and the note is
+simply wrong on a second device. `FIRST_DRAFTED_STEP` in `stages.ts` is where a
+real step field plugs in.
 
 ### Going back
 
@@ -192,9 +190,9 @@ Default off; `.env.development` turns it on.
 ```
 src/features/self-service/
   SelfServicePage.tsx     two phases, and the resume seed
-  stages.ts               status → screen, and resumeStep
+  stages.ts               status → screen
   api/       types.ts · client.ts · http.ts · mock.ts · index.ts · queries.ts
-  session/   tokenStore.ts · progressStore.ts
+  session/   tokenStore.ts · leaveGuard.ts
   stages/    FindStage · VerifyOwnershipStage · OtpStage · DetailsStage
              ScanningStage · PhotosStage · StatusStage
              Review/{index,StorySection,ContactSection,MenusSection,useProfileDraft}

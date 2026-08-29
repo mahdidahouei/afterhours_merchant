@@ -107,17 +107,32 @@ hand.
 Screens holding unsaved edits register a `leaveGuard` so the rail saves them on
 the way out, or stays put and shows the error if that save fails.
 
-### Resuming
+### Coming back
 
-`claim.status` has one value, `drafted`, for the whole of steps 4–6, so the API
-cannot say which of the three an owner stopped on. It is recovered instead: a
-connected platform means step 6, an uploaded photo means step 5, otherwise step
-4 — plus a `claimId`-keyed note in `localStorage` covering the case the
-derivation can't see, which is opening a step and leaving without doing anything
-on it. Whichever is further along wins, so a resume never moves backwards.
+Every visit to `/claim` starts at the search box. A session is something an
+owner establishes by verifying, there and then — a token left in the browser by
+a previous visit is dropped on arrival, so it can never short-circuit the first
+step.
 
-A `currentStep` field on `Claim` would replace both halves; see
-`src/features/self-service/session/progressStore.ts`.
+After verification, `POST /sessions` returns the claim and its `status` decides
+the screen: `scan_failed` reopens on the details form with the error, `submitted`
+on the waiting screen, `live` on the finished listing, and so on.
+
+**What the API cannot say is which of the four editing screens they were last
+on**, because `drafted` is a single status covering details, build, photos and
+bookings. A returning owner therefore lands on Build your profile, and walks
+forward from there — nothing is lost, and every step remains reachable from the
+rail.
+
+That is deliberate. Guessing the step from photo counts, or remembering it in
+`localStorage`, would both be the client inventing a fact the server never
+stated, and the second would be wrong the moment the owner opened the claim on
+another device. **Add a step field to `Claim`** and `SelfServicePage` seeds
+`draftedStep` from it; `FIRST_DRAFTED_STEP` in `stages.ts` marks the spot.
+
+Only two things are stored in the browser: the bearer token for the current
+session, and — in development only — the mock's own claim, which stands in for
+the server's database.
 
 ## Configuration
 

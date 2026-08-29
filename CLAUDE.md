@@ -103,13 +103,19 @@ page state; everything after is a function of status. `stages.ts` holds that
 mapping.
 
 **`drafted` is the exception, and the only one.** One status covers four
-screens — details, build, photos, bookings — so `draftedStep` lives on the page
-beside the status. It is seeded once per claim by `resumeStep`, which derives
-from what the claim holds (a connected platform means bookings, a photo means
-photos) and takes the further of that and the localStorage note in
-`session/progressStore.ts`. Never re-derive on every render: a photo finishing
-its upload would then yank the owner forward mid-edit. Delete both halves if
-`Claim` ever grows a `currentStep`.
+screens — details, build, photos, bookings — so `draftedStep` is session state
+on the page. It starts at `FIRST_DRAFTED_STEP` and is moved only by the owner:
+the rail, and the Back/Next buttons. Nothing persists it.
+
+**Do not reintroduce a client-side guess at which step they were on.** Deriving
+it from photo counts or a localStorage note both invent a fact the server never
+stated, and the note is wrong as soon as the claim is opened on another device.
+When `Claim` grows a step field, seed `draftedStep` from the `POST /sessions`
+response and delete `FIRST_DRAFTED_STEP`.
+
+Arriving at `/claim` always shows the search box and clears any stored token —
+in a `useState` initialiser, not an effect, because `useClaim` reads the token
+during render.
 
 Those four are also navigable in both directions from the journey rail, so an
 owner can go back and fix something. Two of them hold unsaved edits in local
