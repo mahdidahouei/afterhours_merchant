@@ -95,6 +95,18 @@ The six steps, and what each one calls:
 | 5 | Add your photos | `POST/PATCH/DELETE /claim/photos` · `POST /claim/social/{provider}/connect` |
 | 6 | Connect bookings | `GET /reservation-platforms` (+ `/guide`, both live) · `POST /claim/reservation` · `POST /claim/submit` |
 
+### Going back
+
+The journey rail and the mobile stepper are navigation once a profile exists:
+any of steps 3–6 can be returned to, in either direction. Step 3 keeps working
+after the profile is drafted — `PATCH /claim/place` accepts the listing facts
+throughout — so fixing a phone number does not mean redoing anything, and it
+never re-runs the website scan over a profile that has since been edited by
+hand.
+
+Screens holding unsaved edits register a `leaveGuard` so the rail saves them on
+the way out, or stays put and shows the error if that save fails.
+
 ### Resuming
 
 `claim.status` has one value, `drafted`, for the whole of steps 4–6, so the API

@@ -102,13 +102,22 @@ just returned. Stages 0–2 happen before a claim exists, so those three are loc
 page state; everything after is a function of status. `stages.ts` holds that
 mapping.
 
-**`drafted` is the exception, and the only one.** One status covers three
-screens — build, photos, bookings — so `draftedStep` lives on the page beside
-the status. It is seeded once per claim by `resumeStep`, which derives from what
-the claim holds (a connected platform means bookings, a photo means photos) and
-takes the further of that and the localStorage note in `session/progressStore.ts`.
-Never re-derive on every render: a photo finishing its upload would then yank the
-owner forward mid-edit. Delete both halves if `Claim` ever grows a `currentStep`.
+**`drafted` is the exception, and the only one.** One status covers four
+screens — details, build, photos, bookings — so `draftedStep` lives on the page
+beside the status. It is seeded once per claim by `resumeStep`, which derives
+from what the claim holds (a connected platform means bookings, a photo means
+photos) and takes the further of that and the localStorage note in
+`session/progressStore.ts`. Never re-derive on every render: a photo finishing
+its upload would then yank the owner forward mid-edit. Delete both halves if
+`Claim` ever grows a `currentStep`.
+
+Those four are also navigable in both directions from the journey rail, so an
+owner can go back and fix something. Two of them hold unsaved edits in local
+state, so the rail cannot just call `setDraftedStep` — the screen registers a
+`leaveGuard` (`session/leaveGuard.ts`) that saves first and can refuse to leave.
+Anything new that holds a draft must register one too, or the rail will discard
+it silently. Steps 1–2 are never navigable: a search box and a one-time code
+have nothing to edit.
 
 Every mutation returns the complete claim, so `useClaimMutation` replaces the
 cache rather than invalidating it. Never merge, never refetch after a write.

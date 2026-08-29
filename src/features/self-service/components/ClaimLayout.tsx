@@ -7,6 +7,9 @@ import { StepKicker } from "./StepKicker";
 type Props = {
   activeIndex: number;
   stageLabel: string;
+  /** Journey indexes the owner may click back to. Empty makes the rail static. */
+  reachable?: number[];
+  onNavigate?: (index: number) => void;
   /** Right-hand header slot — the profile strength meter, once there is one. */
   headerAside?: React.ReactNode;
   children: React.ReactNode;
@@ -17,10 +20,18 @@ type Props = {
  * and the work panel.
  *
  * The rail and the kicker are the same information at two sizes — the rail
- * shows all five steps with their subtitles from `lg` up, the kicker collapses
- * that to one line and five dots below it. Only one is ever rendered visibly.
+ * shows all six steps with their subtitles from `lg` up, the kicker collapses
+ * that to one line and six dots below it. Only one is ever rendered visibly, and
+ * both carry the same back-navigation.
  */
-export function ClaimLayout({ activeIndex, stageLabel, headerAside, children }: Props) {
+export function ClaimLayout({
+  activeIndex,
+  stageLabel,
+  reachable,
+  onNavigate,
+  headerAside,
+  children,
+}: Props) {
   return (
     // `[&_button]:normal-case` undoes the Button primitive's inherited
     // `text-transform: capitalize`. The brand guide is explicit that everything
@@ -44,10 +55,19 @@ export function ClaimLayout({ activeIndex, stageLabel, headerAside, children }: 
       </header>
 
       <main className="mx-auto flex w-full max-w-[1180px] gap-12 px-5 pb-32 pt-7 tb:px-7 lg:pt-10">
-        <JourneyRail activeIndex={activeIndex} />
+        <JourneyRail
+          activeIndex={activeIndex}
+          reachable={reachable}
+          onNavigate={onNavigate}
+        />
 
         <div className="flex min-w-0 flex-1 flex-col gap-5">
-          <StepKicker activeIndex={activeIndex} label={stageLabel} />
+          <StepKicker
+            activeIndex={activeIndex}
+            label={stageLabel}
+            reachable={reachable}
+            onNavigate={onNavigate}
+          />
           {children}
         </div>
       </main>

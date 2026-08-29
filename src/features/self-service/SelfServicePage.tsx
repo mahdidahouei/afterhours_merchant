@@ -18,10 +18,13 @@ import { EMPTY_PENDING_API } from "./api/types";
 import { ClaimLayout } from "./components/ClaimLayout";
 import { DevStageSwitcher } from "./components/DevStageSwitcher";
 import type { Language } from "./stages/Review/MenusSection";
+import type { LeaveGuard } from "./session/leaveGuard";
 import { clearProgress, readProgress, writeProgress } from "./session/progressStore";
 import { clearToken, readToken, writeToken } from "./session/tokenStore";
 import {
+  draftedStepAt,
   journeyIndexOf,
+  reachableSteps,
   resumeStep,
   stageForStatus,
   STAGE_LABEL,
@@ -85,6 +88,8 @@ export default function SelfServicePage() {
   const resumedFor = useRef<string | null>(null);
   /** Set when something else has already chosen the step for the next claim. */
   const skipResume = useRef(false);
+  /** The current screen's chance to save before the rail navigates away. */
+  const leaveGuard = useRef<LeaveGuard | null>(null);
 
   /** Dev-only: seed the mock into a status and render that screen. */
   const jumpToScreen = useCallback(
@@ -122,7 +127,8 @@ export default function SelfServicePage() {
   useResume(claim.data, setDraftedStep, resumedFor, skipResume);
 
   const status = claim.data?.status;
-  const stage: Stage = hasToken && status ? stageForStatus(status, draftedStep) : anonStage;
+  const stage: Stage =
+    hasToken && status ? stageForStatus(status, draftedStep) : anonStage;
 
   /* Remember how far they got, so leaving mid-flow returns them here. */
   useEffect(() => {
@@ -157,8 +163,29 @@ export default function SelfServicePage() {
 
   const activeIndex = journeyIndexOf(stage);
 
+  /**
+   * Going back to an earlier step is navigation, not a resume — so it must not
+   * be undone by `useResume` on the next poll, and it must not rewind the
+   * furthest-reached note (`writeProgress` only ever moves forward).
+   */
+  const goToStep = useCallback(async (index: number) => {
+    const step = draftedStepAt(index);
+    if (!step) return;
+
+    // The screen being left may be holding unsaved edits. If saving them fails,
+    // stay put — the error is already on screen where it happened.
+    if (leaveGuard.current && !(await leaveGuard.current())) return;
+
+    setDraftedStep(step);
+  }, []);
+
   return (
-    <ClaimLayout activeIndex={activeIndex} stageLabel={STAGE_LABEL[stage]}>
+    <ClaimLayout
+      activeIndex={activeIndex}
+      stageLabel={STAGE_LABEL[stage]}
+      reachable={reachableSteps(status)}
+      onNavigate={(index) => void goToStep(index)}
+    >
       {isMockApi && <DevStageSwitcher onJump={jumpToScreen} />}
 
       <Toast
@@ -213,14 +240,28 @@ export default function SelfServicePage() {
 
       {claim.data && (
         <>
-          {stage === "details" && <DetailsStage claim={claim.data} />}
+          {stage === "details" && (
+            <DetailsStage
+              claim={claim.data}
+              // Only once a profile exists: before that, this screen's job is to
+              // start the scan, and there is nowhere to go back to.
+              onDone={
+                claim.data.status === "drafted"
+                  ? () => setDraftedStep("review")
+                  : undefined
+              }
+              leaveGuard={leaveGuard}
+            />
+          )}
 
           {stage === "scanning" && <ScanningStage claim={claim.data} />}
 
           {stage === "review" && (
             <ReviewStage
               claim={claim.data}
+              onBack={() => setDraftedStep("details")}
               onContinue={() => setDraftedStep("photos")}
+              leaveGuard={leaveGuard}
               languages={pendingApi.menuFileLanguages}
               onLanguageChange={(key, language) =>
                 setPendingApi((prev) => ({

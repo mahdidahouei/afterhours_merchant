@@ -26,15 +26,25 @@ export type Stage =
 export type AnonStage = Extract<Stage, "search" | "verifyOwnership" | "otp">;
 
 /**
- * `drafted` covers three screens, so the page carries this alongside the status.
+ * Which screen `drafted` is showing.
  *
  * This is the one place the contract leaves a gap: `status` has a single value
- * for the whole of the owner's editing work, so it cannot say which of build /
- * photos / bookings they were on. See `resumeStep` for how it is recovered.
+ * for the whole of the owner's editing work, so it cannot say which screen they
+ * were on. See `resumeStep` for how it is recovered.
+ *
+ * `details` is in here as well as being what `verified` maps to. The listing
+ * facts stay editable after the profile is drafted — `PATCH /claim/place`
+ * accepts them throughout — so the owner can come back and fix a phone number
+ * without losing the profile they have written.
  */
-export type DraftedStep = "review" | "photos" | "bookings";
+export type DraftedStep = "details" | "review" | "photos" | "bookings";
 
-export const DRAFTED_ORDER: DraftedStep[] = ["review", "photos", "bookings"];
+export const DRAFTED_ORDER: DraftedStep[] = [
+  "details",
+  "review",
+  "photos",
+  "bookings",
+];
 
 export function stageForStatus(status: ClaimStatus, draftedStep: DraftedStep): Stage {
   switch (status) {
@@ -64,15 +74,37 @@ export function stageForStatus(status: ClaimStatus, draftedStep: DraftedStep): S
  * the client's own note of the last step reached, which covers the case the
  * derivation cannot — arriving on a step and leaving without doing anything on
  * it. Whichever is further along wins, so a resume never goes backwards.
+ *
+ * `details` is never a resume target. It is somewhere the owner chooses to go
+ * back to, not somewhere they can be left stranded: once a profile exists, the
+ * work continues at `review`.
  */
 export function resumeStep(claim: Claim, furthest?: DraftedStep | null): DraftedStep {
   const derived: DraftedStep =
     claim.reservation.length > 0 ? "bookings" : claim.photos.length > 0 ? "photos" : "review";
 
-  if (!furthest) return derived;
+  if (!furthest || furthest === "details") return derived;
   return DRAFTED_ORDER.indexOf(furthest) > DRAFTED_ORDER.indexOf(derived)
     ? furthest
     : derived;
+}
+
+/**
+ * The steps an owner may click back to from where they are now, as indexes into
+ * `JOURNEY`.
+ *
+ * Only while `drafted`. Before that there is nothing behind them worth editing —
+ * search and the one-time code have no state to correct — and from `submitted`
+ * on the claim is with an admin and out of their hands.
+ */
+export function reachableSteps(status: ClaimStatus | undefined): number[] {
+  if (status !== "drafted") return [];
+  return DRAFTED_ORDER.map((step) => journeyIndexOf(step as Stage));
+}
+
+/** The `drafted` screen a journey index refers to, if it is one of them. */
+export function draftedStepAt(index: number): DraftedStep | null {
+  return DRAFTED_ORDER.find((step) => journeyIndexOf(step as Stage) === index) ?? null;
 }
 
 const STEP_OF_STAGE: Record<Stage, JourneyStepId> = {

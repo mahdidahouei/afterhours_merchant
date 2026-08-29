@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
+import { ArrowLeft } from "iconsax-reactjs";
 import { errorMessage, isProblem, ProblemError } from "@/lib/errors";
 import { Accordion } from "@/ui/Accordion";
 import { Button } from "@/ui/Button";
 import { usePatchPlace, useSaveProfile, useTaxonomy } from "../../api/queries";
+import { useLeaveGuard, type LeaveGuardRef } from "../../session/leaveGuard";
 import { write, type Claim } from "../../api/types";
 import { StageHeading, StagePanel } from "../../components/ClaimLayout";
 import { ContactSection } from "./ContactSection";
@@ -12,7 +14,10 @@ import { profileStrength, sectionOfField, useProfileDraft } from "./useProfileDr
 
 type Props = {
   claim: Claim;
+  onBack: () => void;
   onContinue: () => void;
+  /** Save the draft if the journey rail navigates away from this screen. */
+  leaveGuard: LeaveGuardRef;
   /** PENDING_API state, owned by the page so it survives stage switches. */
   languages: Record<string, Language>;
   onLanguageChange: (key: string, language: Language) => void;
@@ -32,7 +37,9 @@ const SECTIONS = ["Your story", "Contact & reservations", "Your menus"] as const
  */
 export function ReviewStage({
   claim,
+  onBack,
   onContinue,
+  leaveGuard,
   languages,
   onLanguageChange,
   primaryPlatform,
@@ -88,6 +95,23 @@ export function ReviewStage({
   const saveAndContinue = async () => {
     if (await save()) onContinue();
   };
+
+  /**
+   * Leaving with edits in hand saves them first.
+   *
+   * The draft lives in this component, so walking away without saving would
+   * silently drop it — and the owner's mental model is that everything saves as
+   * it goes, which is what the rail promises.
+   */
+  const leaveTo = async (go: () => void) => {
+    if (await commit()) go();
+  };
+
+  /** True when it is safe to leave: nothing to save, or the save worked. */
+  const commit = async () => (isDirty || phoneChanged ? save() : true);
+
+  // The rail can leave this screen without touching its own buttons.
+  useLeaveGuard(leaveGuard, commit);
 
   return (
     <StagePanel>
@@ -174,7 +198,16 @@ export function ReviewStage({
             </p>
           </div>
 
-          <div className="flex gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => void leaveTo(onBack)}
+              disabled={isSaving}
+              className="inline-flex shrink-0 items-center gap-1.5 font-satoshi text-[13px] font-medium text-color-secondary-text transition-colors hover:text-color-primary disabled:opacity-60"
+            >
+              <ArrowLeft size={16} /> Back
+            </button>
+
             {isDirty || phoneChanged ? (
               <Button
                 variant="secondary"

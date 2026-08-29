@@ -65,6 +65,22 @@ owner forward the moment a photo finished uploading.
 reading a field. Until then, `session/progressStore.ts` is the whole workaround
 and is documented as disposable.
 
+### Going back
+
+Steps 3–6 are navigable in both directions from the rail (and the mobile
+stepper) for as long as the claim is `drafted`. Step 3 stays live because
+`PATCH /claim/place` accepts the listing facts throughout; revisiting it saves
+and returns rather than re-running the scan, which would otherwise overwrite a
+profile the owner has since edited by hand.
+
+Steps 1–2 are never navigable — a search box and a one-time code have nothing to
+correct — and from `submitted` on the claim is with an admin.
+
+Two screens hold unsaved edits in local state, so the rail cannot simply switch
+`draftedStep`. Each registers a `leaveGuard` that commits before the page moves
+and can refuse, leaving the owner on the screen with the failed save's error
+already visible. Any future screen holding a draft must do the same.
+
 ## Auth boundary
 
 `lib/api.ts` exposes `createApiClient()`. `api` stays the public, token-free

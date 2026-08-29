@@ -38,6 +38,13 @@ const TARGETS: Target[] = [
   { label: "3 · Details", status: "verified" },
   { label: "3 · Scan failed", status: "scan_failed", hint: "error banner" },
   { label: "4 · Building", status: "scanning", hint: "progress" },
+  {
+    label: "3 · Details (revisit)",
+    status: "drafted",
+    draftedStep: "details",
+    photos: true,
+    hint: "back-edit",
+  },
   { label: "4 · Build profile", status: "drafted", draftedStep: "review" },
   {
     label: "4 · Sent back",

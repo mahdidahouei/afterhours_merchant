@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { ArrowLeft } from "iconsax-reactjs";
 import { errorMessage } from "@/lib/errors";
 import { Button } from "@/ui/Button";
 import { Switch } from "@/ui/Switch";
@@ -10,9 +11,25 @@ import GlobeIcon from "@/assets/icons/global.svg?react";
 import { isMockApi, simulateScanFailure } from "../api";
 import { useBuildProfile, usePatchPlace } from "../api/queries";
 import { write, type Claim, type PlacePatch } from "../api/types";
+import {
+  useLeaveGuard,
+  type LeaveGuard,
+  type LeaveGuardRef,
+} from "../session/leaveGuard";
+
+const alwaysLeave = async () => true;
 import { StageHeading, StagePanel } from "../components/ClaimLayout";
 
-type Props = { claim: Claim };
+type Props = {
+  claim: Claim;
+  /**
+   * Set only when the owner came back here from a later step. Its presence is
+   * what turns this from "confirm, then scan" into "correct, then return".
+   */
+  onDone?: () => void;
+  /** Save the listing facts if the journey rail navigates away. */
+  leaveGuard?: LeaveGuardRef;
+};
 
 /**
  * Address is absent on purpose: `PATCH /claim/place` accepts name, phone,
@@ -34,8 +51,17 @@ const fieldsOf = (claim: Claim): Fields => ({
  * Also the screen a failed scan comes back to, with `scanError` shown above the
  * form — the contract routes `scan_failed` here so the owner can fix the URL and
  * retry, or skip the scan entirely.
+ *
+ * And, with `onDone`, the screen an owner returns to later to fix a phone number
+ * or a web address. In that mode it saves and goes back: re-running the scan
+ * would rewrite the profile they have since edited by hand, which is not what
+ * "I mistyped our number" should cost.
  */
-export function DetailsStage({ claim }: Props) {
+export function DetailsStage({ claim, onDone, leaveGuard }: Props) {
+  // `useLeaveGuard` is a hook, so it can't be called conditionally; a screen
+  // rendered without a guard registers into a ref nobody reads.
+  const ownRef = useRef<LeaveGuard | null>(null);
+  const fallbackGuardRef = leaveGuard ?? ownRef;
   const [fields, setFields] = useState<Fields>(() => fieldsOf(claim));
   const [simulateFailure, setSimulateFailure] = useState(false);
 
@@ -43,7 +69,17 @@ export function DetailsStage({ claim }: Props) {
   const buildProfile = useBuildProfile();
 
   const hasFailed = claim.status === "scan_failed";
+  const isRevisit = Boolean(onDone);
   const isBusy = patchPlace.isPending || buildProfile.isPending;
+
+  const isDirty = (() => {
+    const original = fieldsOf(claim);
+    return (
+      fields.name.trim() !== original.name ||
+      fields.phone.trim() !== original.phone ||
+      fields.websiteUri.trim() !== original.websiteUri
+    );
+  })();
 
   const set = (key: keyof Fields) => (event: React.ChangeEvent<HTMLInputElement>) =>
     setFields((prev) => ({ ...prev, [key]: event.target.value }));
@@ -64,6 +100,26 @@ export function DetailsStage({ claim }: Props) {
     }
 
     return patch;
+  };
+
+  /** True when it is safe to leave: nothing changed, or the patch went through. */
+  const commit = async () => {
+    const patch = buildPatch();
+    if (Object.keys(patch).length === 0) return true;
+    return patchPlace
+      .mutateAsync(patch)
+      .then(() => true)
+      .catch(() => false);
+  };
+
+  // The rail can leave this screen without touching its own buttons. Only a
+  // revisit has anything to protect: on the first pass the owner has to press
+  // a button to get anywhere, and the rail offers nothing to click.
+  useLeaveGuard(fallbackGuardRef, isRevisit ? commit : alwaysLeave);
+
+  /** Save the listing facts and go back, without touching the profile. */
+  const saveAndReturn = async () => {
+    if (await commit()) onDone?.();
   };
 
   const start = async (options?: { skipScan?: boolean }) => {
@@ -89,16 +145,16 @@ export function DetailsStage({ claim }: Props) {
             We couldn't reach your site.
           </p>
           <p className="mt-1 font-satoshi text-[13px] leading-[160%] text-color-secondary-text">
-            {claim.scanError ??
-              "It may be down, or blocking automated visitors."}{" "}
-            Your details are safe — nothing is lost.
+            {claim.scanError ?? "It may be down, or blocking automated visitors."} Your
+            details are safe — nothing is lost.
           </p>
         </div>
       )}
 
       <StageHeading title="Check your details.">
-        This is what the directory has on file. Correct anything that's off — then we'll
-        read your website to build your full profile.
+        {isRevisit
+          ? "Fix anything that's wrong here. Your profile, photos and bookings stay exactly as you left them."
+          : "This is what the directory has on file. Correct anything that's off — then we'll read your website to build your full profile."}
       </StageHeading>
 
       <div className="flex flex-col gap-3.5">
@@ -150,7 +206,9 @@ export function DetailsStage({ claim }: Props) {
             onChange={set("websiteUri")}
           />
           <p className="mt-1.5 pl-1 font-satoshi text-[12px] text-color-secondary-text">
-            We'll read this to build your profile.
+            {isRevisit
+              ? "Shown on your listing. We won't re-read it — your profile stays as it is."
+              : "We'll read this to build your profile."}
           </p>
         </div>
       </div>
@@ -165,7 +223,7 @@ export function DetailsStage({ claim }: Props) {
         </p>
       )}
 
-      {isMockApi && (
+      {isMockApi && !isRevisit && (
         <div className="mt-5 rounded-[12px] bg-color-background px-4 py-3">
           <Switch
             checked={simulateFailure}
@@ -175,28 +233,54 @@ export function DetailsStage({ claim }: Props) {
         </div>
       )}
 
-      <div className="mt-6 flex flex-col gap-2.5">
-        <Button
-          variant="primary"
-          size="responsive"
-          isLoading={isBusy}
-          disabled={isBusy || !fields.name.trim()}
-          onClick={() => void start()}
-          className="h-[50px] w-full rounded-full text-[13px] font-medium"
-        >
-          {hasFailed ? "Try again" : "Looks right — build my profile"}
-        </Button>
+      {isRevisit ? (
+        <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-color-border pt-5">
+          <button
+            type="button"
+            onClick={onDone}
+            disabled={isBusy}
+            className="inline-flex items-center gap-1.5 font-satoshi text-[13px] font-medium text-color-secondary-text transition-colors hover:text-color-primary disabled:opacity-60"
+          >
+            <ArrowLeft size={16} /> Back to my profile
+          </button>
 
-        <Button
-          variant="secondary"
-          size="responsive"
-          disabled={isBusy}
-          onClick={() => void start({ skipScan: true })}
-          className="h-[46px] w-full rounded-full text-[13px] font-normal"
-        >
-          Fill in my profile by hand
-        </Button>
-      </div>
+          <div className="flex-1" />
+
+          <Button
+            variant="primary"
+            size="responsive"
+            isLoading={isBusy}
+            disabled={isBusy || !fields.name.trim() || !isDirty}
+            onClick={() => void saveAndReturn()}
+            className="h-[48px] rounded-full px-6 text-[13px] font-medium max-tb:w-full"
+          >
+            {isDirty ? "Save changes" : "Saved"}
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-6 flex flex-col gap-2.5">
+          <Button
+            variant="primary"
+            size="responsive"
+            isLoading={isBusy}
+            disabled={isBusy || !fields.name.trim()}
+            onClick={() => void start()}
+            className="h-[50px] w-full rounded-full text-[13px] font-medium"
+          >
+            {hasFailed ? "Try again" : "Looks right — build my profile"}
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="responsive"
+            disabled={isBusy}
+            onClick={() => void start({ skipScan: true })}
+            className="h-[46px] w-full rounded-full text-[13px] font-normal"
+          >
+            Fill in my profile by hand
+          </Button>
+        </div>
+      )}
     </StagePanel>
   );
 }
