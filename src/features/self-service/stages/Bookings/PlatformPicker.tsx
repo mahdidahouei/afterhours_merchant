@@ -6,11 +6,14 @@ import { ErrorState } from "@/ui/ErrorState";
 import { Skeleton } from "@/ui/Skeleton";
 import { TextField } from "@/ui/TextField";
 import { useReservationPlatforms } from "../../api/queries";
-import type { ClaimReservation, ReservationPlatform } from "../../api/types";
+import {
+  PLATFORM_ORDER,
+  platformLabel,
+  type ClaimReservation,
+  type ReservationPlatform,
+} from "../../api/types";
 
 type Props = {
-  /** Platform names the scan read off the website, so they can be surfaced first. */
-  mentioned: string[];
   connected: ClaimReservation[];
   onPick: (platform: ReservationPlatform) => void;
   onDisconnect: (platformId: string) => void;
@@ -20,12 +23,13 @@ type Props = {
 /**
  * Pick a booking platform.
  *
- * The list is ordered with the platforms the owner's own website mentions at the
- * top — the scan already worked out which they use, and making them hunt for it
- * in an alphabetical list of nine would waste that.
+ * The list is exactly what `GET /reservation-platforms` returns — the three
+ * integrations that actually exist. Only the display order and the brand casing
+ * come from us, because the API's `name` is a lowercase key and its ordering
+ * isn't a product decision. Anything the API adds later still appears, at the
+ * end, under its own name.
  */
 export function PlatformPicker({
-  mentioned,
   connected,
   onPick,
   onDisconnect,
@@ -37,15 +41,18 @@ export function PlatformPicker({
   const rows = useMemo(() => {
     const all = platforms.data ?? [];
     const needle = query.trim().toLowerCase();
+
     const matching = needle
-      ? all.filter((p) => p.name.toLowerCase().includes(needle))
+      ? all.filter((p) => platformLabel(p.name).toLowerCase().includes(needle))
       : all;
 
-    const isMine = (p: ReservationPlatform) =>
-      mentioned.some((name) => name.toLowerCase() === p.name.toLowerCase());
-
-    return [...matching.filter(isMine), ...matching.filter((p) => !isMine(p))];
-  }, [platforms.data, query, mentioned]);
+    // Known platforms in product order; anything unrecognised after them.
+    const rank = (p: ReservationPlatform) => {
+      const index = PLATFORM_ORDER.indexOf(p.name.toLowerCase());
+      return index === -1 ? PLATFORM_ORDER.length : index;
+    };
+    return [...matching].sort((a, b) => rank(a) - rank(b));
+  }, [platforms.data, query]);
 
   if (platforms.isError) {
     return <ErrorState error={platforms.error} onRetry={() => void platforms.refetch()} />;
@@ -66,13 +73,14 @@ export function PlatformPicker({
 
         {!platforms.isPending && rows.length === 0 && (
           <p className="py-8 text-center font-satoshi text-[14px] text-color-secondary-text">
-            Nothing matches “{query.trim()}”.
+            No platforms found.
           </p>
         )}
 
         <ul className="flex flex-col gap-2.5">
           {rows.map((platform) => {
             const live = connected.find((r) => r.platformId === platform.id);
+            const label = platformLabel(platform.name);
 
             return (
               <li
@@ -80,29 +88,20 @@ export function PlatformPicker({
                 className={cn(
                   "flex flex-wrap items-center gap-x-3 gap-y-2.5 rounded-[16px] border p-3.5 transition-colors",
                   live
-                    ? "border-color-success/40 bg-[#2399620A]"
+                    ? "border-color-success/40 bg-color-success/[0.04]"
                     : "border-color-border bg-white hover:border-color-primary/40",
                 )}
               >
-                <PlatformMark platform={platform} />
+                <PlatformMark platform={platform} label={label} />
 
                 <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-center gap-2 font-satoshi text-[15px] font-semibold text-color-primary-text">
-                    {platform.name}
-                    {!live &&
-                      mentioned.some(
-                        (name) => name.toLowerCase() === platform.name.toLowerCase(),
-                      ) && (
-                        <span className="rounded-full bg-color-secondary px-2 py-0.5 font-satoshi text-[11px] font-medium text-color-primary">
-                          Your platform
-                        </span>
-                      )}
+                  <p className="font-satoshi text-[15px] font-semibold text-color-primary-text">
+                    {label}
                   </p>
-
                   <p className="mt-0.5 font-satoshi text-[12px] text-color-secondary-text">
                     {live
                       ? live.integrationId
-                        ? `Connected · account ${live.integrationId}`
+                        ? `Connected · ${live.integrationId}`
                         : "Connected"
                       : "Realtime availability, free"}
                   </p>
@@ -114,7 +113,7 @@ export function PlatformPicker({
                     size="small"
                     disabled={isDisconnecting}
                     onClick={() => onDisconnect(platform.id)}
-                    className="h-[40px] shrink-0 rounded-full text-xs font-normal max-tb:w-full"
+                    className="h-[44px] shrink-0 rounded-full text-xs font-normal max-tb:w-full"
                   >
                     Disconnect
                   </Button>
@@ -123,7 +122,7 @@ export function PlatformPicker({
                     variant="outline-connect"
                     size="small"
                     onClick={() => onPick(platform)}
-                    className="h-[40px] shrink-0 rounded-full text-xs font-normal max-tb:w-full"
+                    className="h-[44px] shrink-0 rounded-full text-xs font-normal max-tb:w-full"
                   >
                     Connect
                   </Button>
@@ -141,21 +140,28 @@ export function PlatformPicker({
           className="font-medium text-color-primary underline underline-offset-4"
         >
           Request it here
-        </a>{" "}
-        — we add new partners every month.
+        </a>
+        .
       </p>
     </>
   );
 }
 
-/** The platform's icon, or its initial when the API has no artwork for it. */
-function PlatformMark({ platform }: { platform: ReservationPlatform }) {
+/** The platform's own icon, with its initial as the fallback. */
+function PlatformMark({
+  platform,
+  label,
+}: {
+  platform: ReservationPlatform;
+  label: string;
+}) {
   if (platform.iconUrl) {
     return (
       <img
         src={platform.iconUrl}
         alt=""
         className="size-10 shrink-0 rounded-[10px] object-contain"
+        loading="lazy"
       />
     );
   }
@@ -165,7 +171,7 @@ function PlatformMark({ platform }: { platform: ReservationPlatform }) {
       aria-hidden
       className="grid size-10 shrink-0 place-content-center rounded-[10px] bg-color-secondary font-lora text-[16px] font-medium text-color-primary"
     >
-      {platform.name.charAt(0)}
+      {label.charAt(0)}
     </span>
   );
 }
@@ -173,7 +179,7 @@ function PlatformMark({ platform }: { platform: ReservationPlatform }) {
 function PickerSkeleton() {
   return (
     <ul className="flex flex-col gap-2.5">
-      {[0, 1, 2, 3].map((row) => (
+      {[0, 1, 2].map((row) => (
         <li
           key={row}
           className="flex items-center gap-3 rounded-[16px] border border-color-border p-3.5"

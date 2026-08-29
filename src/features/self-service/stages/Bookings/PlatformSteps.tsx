@@ -1,30 +1,52 @@
 import { useState } from "react";
-import { ArrowLeft, ArrowRight } from "iconsax-reactjs";
+import Markdown from "react-markdown";
+import { ArrowLeft, ArrowRight, Link2 } from "iconsax-reactjs";
 import { cn } from "@/lib/cn";
 import { errorMessage } from "@/lib/errors";
 import { Button } from "@/ui/Button";
 import { ErrorState } from "@/ui/ErrorState";
 import { Skeleton } from "@/ui/Skeleton";
 import { TextField } from "@/ui/TextField";
+import { VideoPlayer } from "@/ui/VideoPlayer";
+import ShopIcon from "@/assets/icons/shop.svg?react";
 import { useReservationGuide } from "../../api/queries";
-import type { GuideStep, ReservationPlatform } from "../../api/types";
+import {
+  CREDENTIAL_KEY,
+  needOf,
+  platformLabel,
+  type GuideField,
+  type ReservationConnectBody,
+  type ReservationPlatform,
+} from "../../api/types";
+
+type Credentials = Omit<ReservationConnectBody, "platformId">;
 
 type Props = {
   platform: ReservationPlatform;
   onBack: () => void;
-  onConnect: (credentials: { integrationId?: string; apiKey?: string }) => void;
+  onConnect: (credentials: Credentials) => void;
   isConnecting: boolean;
   error: unknown;
 };
 
 /**
- * Walk the owner through one platform's guide, then take the credential.
+ * Walk one platform's guide, collecting whatever it asks for.
  *
- * The guide is the platform's, not ours: `GET /reservation-platforms/{id}/guide`
- * returns however many steps that platform needs. The only structure the UI
- * relies on is `need` — a step that has one asks for a credential, a step
- * without one is pure instruction — so a platform with one step or five renders
- * without a change here.
+ * The guide belongs to the platform, not to us: `GET /reservation-platforms/
+ * {id}/guide` returns its own steps, its own markdown, and a screen recording
+ * per step. Three details of the real payload shape this component:
+ *
+ *   - **Credentials accumulate.** Formitable asks for an API key on step 1 and a
+ *     restaurant key on step 2, and both go in one `POST /claim/reservation`.
+ *     Keeping only the last step's value would make Formitable impossible to
+ *     connect, which is why `values` is a map and not a string.
+ *   - **`need` is `[]` when nothing is wanted**, and `[]` is truthy — see
+ *     `needOf`.
+ *   - **`step` is not an index.** Formitable's second step is numbered 0, so
+ *     position in the array is the only ordering to trust.
+ *
+ * `body` lines are markdown with links and bold; rendering them as text would
+ * put literal `**Beheer**` on screen.
  */
 export function PlatformSteps({
   platform,
@@ -35,7 +57,10 @@ export function PlatformSteps({
 }: Props) {
   const guide = useReservationGuide(platform.id);
   const [index, setIndex] = useState(0);
-  const [credential, setCredential] = useState("");
+  const [values, setValues] = useState<Partial<Record<GuideField, string>>>({});
+  const [missing, setMissing] = useState<GuideField | null>(null);
+
+  const label = platformLabel(platform.name);
 
   if (guide.isPending) return <GuideSkeleton />;
 
@@ -59,88 +84,138 @@ export function PlatformSteps({
 
   const steps = guide.data.steps;
   const step = steps[Math.min(index, steps.length - 1)];
+
+  // A guide that came back empty would otherwise be a blank panel with a dead
+  // Connect button.
+  if (!step) {
+    return (
+      <>
+        <ErrorState
+          message={`We couldn't load the setup steps for ${label}. Please go back and try again.`}
+        />
+        <div className="mt-4 flex justify-center">
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={onBack}
+            className="h-[42px] rounded-full text-xs font-normal"
+          >
+            Change platform
+          </Button>
+        </div>
+      </>
+    );
+  }
+
+  const need = needOf(step);
   const isLast = index >= steps.length - 1;
-  const need = step.need ?? null;
 
-  // The credential is only ever asked for once, on whichever step carries it.
-  const needsCredential = Boolean(need);
-  const canSubmit = !needsCredential || credential.trim().length > 0;
+  const submit = () => {
+    // Only this step's field is checked. Validating every field at once would
+    // let an error left on an earlier step block Connect with nothing on screen
+    // to explain why.
+    if (need && !values[need.field]?.trim()) {
+      setMissing(need.field);
+      return;
+    }
+    setMissing(null);
 
-  const advance = () => {
     if (!isLast) {
       setIndex((current) => current + 1);
       return;
     }
-    if (!canSubmit) return;
 
-    onConnect(
-      need?.field === "apikey"
-        ? { apiKey: credential.trim() }
-        : { integrationId: credential.trim() || undefined },
-    );
+    const credentials: Credentials = {};
+    for (const [field, value] of Object.entries(values)) {
+      if (value?.trim()) {
+        credentials[CREDENTIAL_KEY[field as GuideField]] = value.trim();
+      }
+    }
+    onConnect(credentials);
   };
 
   return (
     <>
       <div className="mb-5 flex flex-wrap items-center gap-3">
+        {platform.iconUrl && (
+          <img src={platform.iconUrl} alt="" className="size-7 rounded-[7px] object-contain" />
+        )}
         <span className="rounded-full bg-color-secondary px-3 py-1 font-satoshi text-[12px] font-medium text-color-primary">
-          Connecting {guide.data.name}
+          Connecting {label}
         </span>
         <span className="font-satoshi text-[12px] text-color-secondary-text">
           {index + 1} of {steps.length}
         </span>
         <span aria-hidden className="flex items-center gap-1">
-          {steps.map((s, i) => (
+          {steps.map((_, position) => (
             <span
-              key={s.step}
+              key={position}
               className={cn(
                 "h-[3px] w-5 rounded-full transition-colors",
-                i <= index ? "bg-color-primary" : "bg-color-border",
+                position <= index ? "bg-color-primary" : "bg-color-border",
               )}
             />
           ))}
         </span>
       </div>
 
-      <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+      <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
         <div>
-          <h2 className="font-lora text-[24px] font-medium text-color-primary-text tb:text-[27px]">
+          {/* The API's titles already read "Step 1: …", so no number is added. */}
+          <h2 className="font-lora text-[22px] font-medium text-color-primary-text tb:text-[25px]">
             {step.title}
           </h2>
 
           <ol className="mt-5 flex flex-col gap-3.5">
-            {step.body.map((line, i) => (
-              <li key={line} className="flex gap-3">
+            {step.body.map((line, position) => (
+              <li key={position} className="flex items-start gap-3">
                 <span
                   aria-hidden
                   className="grid size-[22px] shrink-0 place-content-center rounded-full bg-color-secondary font-satoshi text-[11px] font-semibold text-color-primary"
                 >
-                  {i + 1}
+                  {position + 1}
                 </span>
-                <span className="font-satoshi text-[14px] leading-[160%] text-color-primary-text">
-                  {line}
-                </span>
+                <div className="pt-0.5 font-satoshi text-[13.5px] leading-[165%] text-color-primary-text [&_a]:font-medium [&_a]:text-color-primary [&_a]:underline [&_a]:underline-offset-2 [&_strong]:font-semibold">
+                  <Markdown
+                    components={{
+                      a: ({ href, children }) => (
+                        <a href={href} target="_blank" rel="noreferrer noopener">
+                          {children}
+                        </a>
+                      ),
+                    }}
+                  >
+                    {line}
+                  </Markdown>
+                </div>
               </li>
             ))}
           </ol>
 
           {need && (
-            <div className="mt-6 flex flex-col gap-2.5 tb:flex-row tb:items-start">
-              <div className="min-w-0 flex-1">
-                <TextField
-                  size="responsive"
-                  placeholder={
-                    need.placeholder ??
-                    (need.field === "apikey"
-                      ? `${guide.data.name} API key`
-                      : `${guide.data.name} account ID`)
-                  }
-                  value={credential}
-                  onChange={(event) => setCredential(event.target.value)}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
+            <div className="mt-6">
+              <TextField
+                key={need.field}
+                name={need.field}
+                size="responsive"
+                placeholder={need.placeholder ?? label}
+                icon={<ShopIcon />}
+                value={values[need.field] ?? ""}
+                errorMessage={missing === need.field ? "required" : undefined}
+                hideErrorMessage
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setValues((prev) => ({ ...prev, [need.field]: next }));
+                  if (next.trim()) setMissing(null);
+                }}
+              />
+              {missing === need.field && (
+                <p role="alert" className="mt-1.5 font-satoshi text-[12px] text-color-danger">
+                  Paste the value from {label} to continue.
+                </p>
+              )}
             </div>
           )}
 
@@ -151,7 +226,7 @@ export function PlatformSteps({
           )}
         </div>
 
-        {step.video ? <StepVideo src={step.video} /> : <StepHint step={step} />}
+        {step.video && <VideoPlayer src={step.video} className="lg:w-full" />}
       </div>
 
       <div className="mt-7 flex flex-wrap items-center gap-3 border-t border-color-border pt-5">
@@ -169,11 +244,12 @@ export function PlatformSteps({
           variant="primary"
           size="responsive"
           isLoading={isConnecting}
-          disabled={isConnecting || (isLast && !canSubmit)}
-          onClick={advance}
+          disabled={isConnecting}
+          onClick={submit}
           className="h-[48px] rounded-full px-6 text-[13px] font-medium max-tb:w-full"
         >
-          {isLast ? "Connect" : "I've done this — continue"}
+          {isLast ? <Link2 size={16} className="mr-1.5" /> : null}
+          {isLast ? "Connect" : "Next"}
           {!isLast && <ArrowRight size={16} className="ml-1.5" />}
         </Button>
       </div>
@@ -196,60 +272,18 @@ export function PlatformSteps({
   );
 }
 
-function StepVideo({ src }: { src: string }) {
-  return (
-    <div className="overflow-hidden rounded-[16px] border border-color-border bg-color-background-3 p-3">
-      <p className="mb-2.5 font-satoshi text-[11px] font-semibold uppercase tracking-[0.12em] text-color-secondary-text">
-        Where to click
-      </p>
-      <video
-        src={src}
-        muted
-        loop
-        autoPlay
-        playsInline
-        className="w-full rounded-[10px]"
-      />
-    </div>
-  );
-}
-
-/**
- * What the panel shows when a step has no recording.
- *
- * The design fills this space with a drawing of the platform's own admin. We
- * can't draw nine of those from a contract that doesn't describe them, so the
- * space restates the step instead of sitting empty.
- */
-function StepHint({ step }: { step: GuideStep }) {
-  return (
-    <div className="rounded-[16px] border border-color-border bg-color-background-3 p-5">
-      <p className="font-satoshi text-[11px] font-semibold uppercase tracking-[0.12em] text-color-secondary-text">
-        Step {step.step}
-      </p>
-      <p className="mt-2.5 font-satoshi text-[14px] font-semibold text-color-primary-text">
-        {step.title}
-      </p>
-      <p className="mt-2 font-satoshi text-[13px] leading-[165%] text-color-secondary-text">
-        Do this in your own {step.body.length > 1 ? "browser tab" : "dashboard"} and come
-        back here — this page keeps your place.
-      </p>
-    </div>
-  );
-}
-
 function GuideSkeleton() {
   return (
-    <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+    <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
       <div>
         <Skeleton isLoaded={false} className="h-7 w-2/3" />
         <div className="mt-5 flex flex-col gap-3">
-          {[0, 1, 2].map((row) => (
+          {[0, 1, 2, 3].map((row) => (
             <Skeleton key={row} isLoaded={false} className="h-4 w-full" />
           ))}
         </div>
       </div>
-      <Skeleton isLoaded={false} className="h-[220px] rounded-[16px]" />
+      <Skeleton isLoaded={false} className="aspect-video w-full rounded-[20px]" />
     </div>
   );
 }

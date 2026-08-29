@@ -80,7 +80,6 @@ export function BookingsStage({ claim, onBack }: Props) {
           </StageHeading>
 
           <PlatformPicker
-            mentioned={claim.profile?.reservationPlatforms ?? []}
             connected={claim.reservation}
             onPick={setPlatform}
             onDisconnect={(platformId) => disconnect.mutate(platformId)}

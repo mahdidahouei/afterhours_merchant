@@ -124,8 +124,17 @@ address is Google's and the directory keys off it, so the details screen shows i
 read-only.
 
 `Profile.reservationPlatforms` is free text the scan read off the website.
-`Claim.reservation` is a live integration. They are not the same thing, and step
-6 uses the first only to sort the second's list.
+`Claim.reservation` is a live integration. Not the same thing.
+
+**Step 6 is the connect widget, and it is not mocked.** `GET
+/reservation-platforms` and `/reservation-platforms/{id}/guide` are public and
+live, so `mock.ts` delegates both to `httpOwnerApi` — the three platforms, their
+logos, the markdown and the videos are real. Three things about the payload bite:
+`need` is `[]` (truthy!) when a step wants nothing, so read it through
+`needOf()`; `step` is not an index (Formitable's second step is numbered 0);
+and credentials accumulate across steps — Formitable asks for an API key on step
+1 and a restaurant key on step 2, and both go in one `POST /claim/reservation`.
+`body` lines are markdown and must be rendered as such.
 
 The API is not live yet. `VITE_USE_MOCK=true` (default in development) swaps in
 `api/mock.ts`, a contract-faithful in-memory server that persists its claim to

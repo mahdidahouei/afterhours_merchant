@@ -67,7 +67,7 @@ const TARGETS: Target[] = [
     draftedStep: "bookings",
     photos: true,
     reservation: true,
-    hint: "OpenTable",
+    hint: "Guestplan",
   },
   { label: "7 · Submitted", status: "submitted" },
   { label: "7 · Approved", status: "approved" },
@@ -83,7 +83,7 @@ export function DevStageSwitcher({ onJump }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [active, setActive] = useState<string | null>(null);
 
-  const jump = (target: Target) => {
+  const jump = async (target: Target) => {
     setActive(target.label);
 
     if (!target.status) {
@@ -95,7 +95,9 @@ export function DevStageSwitcher({ onJump }: Props) {
       return;
     }
 
-    seedMockClaim(target.status, {
+    // Seeding reads the live platform list for the "already connected" state,
+    // so this awaits before the screen is asked to render.
+    await seedMockClaim(target.status, {
       reviewNote: target.reviewNote,
       photos: target.photos,
       reservation: target.reservation,
@@ -117,7 +119,7 @@ export function DevStageSwitcher({ onJump }: Props) {
               <li key={target.label}>
                 <button
                   type="button"
-                  onClick={() => jump(target)}
+                  onClick={() => void jump(target)}
                   className={cn(
                     "flex w-full items-baseline justify-between gap-2 rounded-[9px] px-2.5 py-2 text-left transition-colors",
                     active === target.label

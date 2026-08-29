@@ -107,16 +107,31 @@ field in the whole API and it lives on `Place`.
 
 ## Step 6 — connect bookings
 
-`GET /reservation-platforms` lists what we integrate with;
-`GET /reservation-platforms/{id}/guide` returns that platform's own walkthrough.
-The guide's length and content belong to the platform, so the UI walks
-`steps[]` and relies on exactly one thing: a step carrying `need` asks for a
-credential, a step without one is instruction. `need.field` picks between
-`integrationId` and `apiKey` on `POST /claim/reservation`.
+This is the connect widget, unchanged in substance. Both its reads are public
+and already live, so they are **not mocked** even in development: the list, the
+logos, the markdown instructions and the per-step screen recordings are the real
+ones. Only `POST /claim/reservation` is stubbed, because the claim API is what
+isn't live.
 
-The picker sorts platforms the scan already found on the website
-(`profile.reservationPlatforms`) to the top — the scan did that work, and
-making the owner hunt through nine alphabetical rows would waste it.
+The guide's length and content belong to the platform, so the UI walks `steps[]`
+and relies on one rule: a step carrying `need` asks for a credential, a step
+without one is instruction. `need.field` picks between `integrationId` and
+`apiKey` on `POST /claim/reservation`.
+
+Three details of the real payload are easy to get wrong:
+
+| Looks like | Actually |
+| --- | --- |
+| `need` absent when nothing is wanted | It is `[]` — and `[]` is truthy. Read it through `needOf()`. |
+| `step` is the index | Formitable's second step is numbered `0`. Order by array position. |
+| One credential per connection | Formitable wants an API key (step 1) *and* a restaurant key (step 2), both in one call. Credentials accumulate. |
+
+`body` lines are markdown with links and bold — rendered as text they show
+literal `**Beheer**`.
+
+The list is exactly what the API returns; only the display order and the brand
+casing ("GoTable", not "gotable") come from us, as the connect widget has always
+done. An unrecognised platform still appears, at the end, under its own name.
 
 Connecting is optional. "Connect" and "I'll connect later" both end with
 `POST /claim/submit`; a restaurant with no integration is still a complete

@@ -1,6 +1,7 @@
 import { ProblemError, type ProblemBody, type ProblemCode } from "@/lib/errors";
 import { clearToken, readToken, writeToken } from "../session/tokenStore";
-import type { OwnerApi } from "./http";
+import { httpOwnerApi, type OwnerApi } from "./http";
+import { platformLabel } from "./types";
 import type {
   Claim,
   ClaimStatus,
@@ -10,8 +11,6 @@ import type {
   Photo,
   Place,
   Profile,
-  ReservationGuide,
-  ReservationPlatform,
   SocialConnection,
   SocialProvider,
   Taxonomy,
@@ -22,14 +21,17 @@ import type {
 /**
  * An in-memory stand-in for the owner API, faithful to the contract.
  *
- * It exists because the backend is not live yet and the flow is nine screens
- * deep — without it, nothing past the search box can be seen or reviewed. It
- * reproduces the parts that shape the UI: latency, the status transitions, the
- * scan that takes time and can fail, the booking-platform guides, and the real
- * error codes.
+ * It exists because the *claim* endpoints are not live yet and the flow is nine
+ * screens deep — without it, nothing past the search box can be seen or
+ * reviewed. It reproduces the parts that shape the UI: latency, the status
+ * transitions, the scan that takes time and can fail, and the real error codes.
+ *
+ * It does **not** stand in for anything that already works. The booking
+ * platforms and their guides are public endpoints serving real content today,
+ * so those two calls are passed straight through to `httpOwnerApi`.
  *
  * Enabled by VITE_USE_MOCK. Delete this file and its two references when the
- * real API ships.
+ * claim API ships.
  */
 
 const LATENCY_MS = 420;
@@ -172,7 +174,7 @@ const SCANNED_PROFILE: Profile = {
   social: { instagram: "oli.mazi.utrecht", facebook: null, tiktok: null },
   reservable: true,
   reservationUrl: "https://olimazi.nl/reserveren",
-  reservationPlatforms: ["Formitable", "OpenTable"],
+  reservationPlatforms: ["Formitable"],
   menus: [
     {
       title: "Dinner",
@@ -184,67 +186,6 @@ const SCANNED_PROFILE: Profile = {
     },
   ],
 };
-
-/* ── Booking platforms ──────────────────────────────────────────────────── */
-
-const PLATFORMS: (ReservationPlatform & { domain: string })[] = [
-  { id: "pf_guestplan", name: "Guestplan", iconUrl: null, domain: "app.guestplan.com" },
-  { id: "pf_formitable", name: "Formitable", iconUrl: null, domain: "app.formitable.com" },
-  { id: "pf_gotable", name: "GoTable", iconUrl: null, domain: "app.gotable.nl" },
-  { id: "pf_zenchef", name: "Zenchef", iconUrl: null, domain: "app.zenchef.com" },
-  {
-    id: "pf_opentable",
-    name: "OpenTable",
-    iconUrl: null,
-    domain: "guestcenter.opentable.com",
-  },
-  { id: "pf_thefork", name: "TheFork", iconUrl: null, domain: "manager.thefork.com" },
-  {
-    id: "pf_covermanager",
-    name: "CoverManager",
-    iconUrl: null,
-    domain: "app.covermanager.com",
-  },
-  { id: "pf_resy", name: "Resy", iconUrl: null, domain: "os.resy.com" },
-  { id: "pf_tebi", name: "Tebi", iconUrl: null, domain: "app.tebi.co" },
-];
-
-/**
- * Every platform's guide has the same two beats — install the integration, then
- * hand over the id that says which restaurant you are — so one generator covers
- * all of them. The real API returns a hand-written guide per platform.
- */
-function guideFor(platform: (typeof PLATFORMS)[number]): ReservationGuide {
-  return {
-    name: platform.name,
-    iconUrl: platform.iconUrl,
-    steps: [
-      {
-        step: 1,
-        title: "Install Afterhours.",
-        body: [
-          `Open ${platform.name}: ${platform.domain}`,
-          "Select Apps → Manage apps from the left menu.",
-          "Choose Booking partners from the top filter bar.",
-          "Find Afterhours and click Install.",
-        ],
-        need: null,
-        video: null,
-      },
-      {
-        step: 2,
-        title: "Link your account.",
-        body: [
-          `In ${platform.name}, open Settings from the left menu.`,
-          "Click Account, then General.",
-          "Copy your Account ID and paste it below.",
-        ],
-        need: { field: "account_id", placeholder: "e.g. 50783" },
-        video: null,
-      },
-    ],
-  };
-}
 
 const TICKET_SUBJECTS: TicketSubject[] = [
   { id: "ts_no_access", name: "I can't access the number on the listing" },
@@ -328,12 +269,29 @@ const SEEDED_PHOTOS: Photo[] = ["#8A6535", "#321B15", "#6B6357", "#B09050"].map(
   }),
 );
 
-const SEEDED_RESERVATION: ClaimReservation = {
-  platformId: "pf_opentable",
-  platformName: "OpenTable",
-  platformIcon: null,
-  integrationId: "50783",
-};
+/**
+ * A connected platform for the seeded "already linked" screen.
+ *
+ * Read from the live platform list rather than written down here, so the id
+ * matches what the picker fetches and the row shows as connected instead of as
+ * an orphan. Falls back to no connection if the list can't be reached.
+ */
+async function seededReservation(): Promise<ClaimReservation[]> {
+  try {
+    const [platform] = await httpOwnerApi.listReservationPlatforms();
+    if (!platform) return [];
+    return [
+      {
+        platformId: platform.id,
+        platformName: platform.name,
+        platformIcon: platform.iconUrl,
+        integrationId: "50783",
+      },
+    ];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Drop the mock straight into a given status, for looking at a screen without
@@ -346,7 +304,7 @@ const SEEDED_RESERVATION: ClaimReservation = {
  * Only reachable from the dev-only stage switcher, and only when the mock is
  * the active implementation.
  */
-export function seedMockClaim(
+export async function seedMockClaim(
   status: ClaimStatus,
   options?: { reviewNote?: string; photos?: boolean; reservation?: boolean },
 ) {
@@ -372,7 +330,7 @@ export function seedMockClaim(
       ? SEEDED_PHOTOS.map((photo, index) => ({ ...photo, position: index }))
       : [];
 
-  claim.reservation = (options?.reservation ?? isPast) ? [{ ...SEEDED_RESERVATION }] : [];
+  claim.reservation = (options?.reservation ?? isPast) ? await seededReservation() : [];
 
   scanStartedAt = Date.now();
   writeToken(id("tok"), iso(24 * 60 * 60 * 1000));
@@ -476,21 +434,19 @@ export const mockOwnerApi: OwnerApi = {
     await wait();
   },
 
-  async listReservationPlatforms() {
-    await wait(260);
-    return PLATFORMS.map(({ id: platformId, name, iconUrl }) => ({
-      id: platformId,
-      name,
-      iconUrl,
-    }));
-  },
-
-  async getReservationGuide(platformId) {
-    await wait(340);
-    const platform = PLATFORMS.find((p) => p.id === platformId);
-    if (!platform) return fail("not_found", { status: 404 });
-    return guideFor(platform);
-  },
+  /*
+   * The booking platforms and their guides are NOT mocked.
+   *
+   * `GET /reservation-platforms` and its `/guide` are public, live today, and
+   * already power the connect widget — the platforms, their icons, the markdown
+   * instructions and the screen recordings are all real. Inventing stand-ins
+   * would mean reviewing step 6 against content that does not exist.
+   *
+   * Only the claim-scoped writes below are mocked, because the owner API is the
+   * part that isn't live yet.
+   */
+  listReservationPlatforms: httpOwnerApi.listReservationPlatforms,
+  getReservationGuide: httpOwnerApi.getReservationGuide,
 
   async listTicketSubjects() {
     await wait(200);
@@ -675,18 +631,23 @@ export const mockOwnerApi: OwnerApi = {
     return snapshot();
   },
 
-  async connectReservation({ platformId, integrationId }) {
-    await wait(1_600);
+  async connectReservation({ platformId, integrationId, apiKey }) {
     const current = requireClaim("drafted");
 
-    const platform = PLATFORMS.find((p) => p.id === platformId);
+    // The platform is looked up in the live list rather than a local table, so
+    // the name and icon stored on the claim are the real ones.
+    const platform = (await httpOwnerApi.listReservationPlatforms()).find(
+      (p) => p.id === platformId,
+    );
     if (!platform) return fail("not_found", { status: 404 });
 
+    await wait(1_600);
+
     // "0" is the mock's rejected credential, so the failure path is reachable.
-    if (integrationId?.trim() === "0") {
+    if (integrationId?.trim() === "0" || apiKey?.trim() === "0") {
       return fail("invalid_request", {
         status: 400,
-        detail: `${platform.name} doesn't recognise that account ID.`,
+        detail: `${platformLabel(platform.name)} didn't accept those details. Check them and try again.`,
       });
     }
 
@@ -696,7 +657,7 @@ export const mockOwnerApi: OwnerApi = {
         platformId,
         platformName: platform.name,
         platformIcon: platform.iconUrl,
-        integrationId: integrationId?.trim() || null,
+        integrationId: integrationId?.trim() || apiKey?.trim() || null,
       },
     ];
     current.updatedAt = iso();

@@ -73,12 +73,16 @@ VITE_USE_MOCK=true   # .env.development — the whole flow is clickable
 VITE_USE_MOCK=false  # .env.production  — real endpoints
 ```
 
-The mock reproduces the contract's latency, status transitions, error codes and
-the booking-platform guides, and it persists the claim to `localStorage` so that
-reloading resumes rather than looking like an expired session. In it, the OTP
-`000000` fails and any other six digits succeed; the account ID `0` is rejected
-by every platform, so the connect failure path is reachable. Turning the flag off
-is the only change needed when the backend ships.
+The mock reproduces the contract's latency, status transitions and error codes,
+and it persists the claim to `localStorage` so that reloading resumes rather than
+looking like an expired session. In it, the OTP `000000` fails and any other six
+digits succeed; a credential of `0` is rejected, so the connect failure path is
+reachable. Turning the flag off is the only change needed when the backend ships.
+
+**Step 6 is never mocked.** `GET /reservation-platforms` and its `/guide` are
+public, live today, and already serve the connect widget, so the mock passes
+both straight through to the real API — the platforms, their logos, the markdown
+instructions and the screen recordings are all the real ones.
 
 The six steps, and what each one calls:
 
@@ -89,7 +93,7 @@ The six steps, and what each one calls:
 | 3 | Check your details | `PATCH /claim/place` · `POST /claim/profile` |
 | 4 | Build your profile | `GET /taxonomy` · `PUT /claim/profile` |
 | 5 | Add your photos | `POST/PATCH/DELETE /claim/photos` · `POST /claim/social/{provider}/connect` |
-| 6 | Connect bookings | `GET /reservation-platforms` (+ `/guide`) · `POST /claim/reservation` · `POST /claim/submit` |
+| 6 | Connect bookings | `GET /reservation-platforms` (+ `/guide`, both live) · `POST /claim/reservation` · `POST /claim/submit` |
 
 ### Resuming
 

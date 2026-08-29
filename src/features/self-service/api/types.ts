@@ -179,7 +179,11 @@ export const PHOTO_TARGET = 6;
 
 /* ── Reservations (step 6) ──────────────────────────────────────────────── */
 
-/** A platform Afterhours can integrate with. From `GET /reservation-platforms`. */
+/**
+ * A platform Afterhours can integrate with. From `GET /reservation-platforms`.
+ *
+ * `name` is the lowercase key — "gotable", not "GoTable". See `PLATFORM_LABEL`.
+ */
 export type ReservationPlatform = {
   id: string;
   name: string;
@@ -187,27 +191,68 @@ export type ReservationPlatform = {
 };
 
 /**
+ * Brand casing and running order for the platforms we integrate with.
+ *
+ * The API's `name` is a lowercase key, and its ordering is not a product
+ * decision, so both are supplied here — exactly as the connect widget has
+ * always done. This is a display lookup, not the list: membership comes from
+ * `GET /reservation-platforms`, so a fourth platform appears (at the end, under
+ * its raw name) rather than silently vanishing.
+ */
+export const PLATFORM_LABEL: Record<string, string> = {
+  formitable: "Formitable",
+  guestplan: "Guestplan",
+  gotable: "GoTable",
+};
+
+export const PLATFORM_ORDER = ["formitable", "guestplan", "gotable"];
+
+/** The platform's brand name, or whatever the API called it. */
+export const platformLabel = (name: string) => PLATFORM_LABEL[name] ?? name;
+
+/**
  * One page of a platform's connection guide.
  *
- * `need` is deliberately loose in the contract — "shape is the platform's, not
- * ours". A step that carries one asks the owner for a credential; a step without
- * one is pure instruction. That is the whole rule the UI needs.
+ * `step` is not reliable — Formitable's second step is numbered 0 — so the UI
+ * orders by array position and never renders the number.
  */
 export type GuideStep = {
   step: number;
   title: string;
-  /** Sentences, rendered as a numbered list. */
+  /** Markdown. Real guides carry links and bold, so they must be rendered. */
   body: string[];
-  need?: GuideNeed | null;
-  /** A short screen recording of the same steps. May be absent. */
+  /**
+   * What this step asks the owner for, if anything.
+   *
+   * The wire sends an empty **array** for "nothing needed", not null and not an
+   * absent key — and `[]` is truthy, so this must go through `needOf()` rather
+   * than being tested directly.
+   */
+  need?: GuideNeed | GuideNeed[] | null;
+  /** A short screen recording of the same steps. */
   video: string | null;
 };
 
+export type GuideField = "account_id" | "apikey";
+
 export type GuideNeed = {
   /** Which credential `POST /claim/reservation` wants this in. */
-  field: "account_id" | "apikey";
+  field: GuideField;
   placeholder?: string;
 };
+
+/** `need: []` means nothing is asked for. Normalise it away at the boundary. */
+export const needOf = (step: GuideStep): GuideNeed | null => {
+  const need = step.need;
+  if (!need || Array.isArray(need)) return null;
+  return need.field ? need : null;
+};
+
+/** Which key on `POST /claim/reservation` a guide field maps to. */
+export const CREDENTIAL_KEY = {
+  account_id: "integrationId",
+  apikey: "apiKey",
+} as const satisfies Record<GuideField, keyof ReservationConnectBody>;
 
 export type ReservationGuide = {
   name: string;
