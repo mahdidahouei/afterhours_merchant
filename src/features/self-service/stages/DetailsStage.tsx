@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { ArrowLeft } from "iconsax-reactjs";
 import { errorMessage } from "@/lib/errors";
 import { Button } from "@/ui/Button";
 import { Switch } from "@/ui/Switch";
@@ -234,18 +233,9 @@ export function DetailsStage({ claim, onDone, leaveGuard }: Props) {
       )}
 
       {isRevisit ? (
-        <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-color-border pt-5">
-          <button
-            type="button"
-            onClick={onDone}
-            disabled={isBusy}
-            className="inline-flex items-center gap-1.5 font-satoshi text-[13px] font-medium text-color-secondary-text transition-colors hover:text-color-primary disabled:opacity-60"
-          >
-            <ArrowLeft size={16} /> Back to my profile
-          </button>
-
-          <div className="flex-1" />
-
+        // No back link: saving returns them, and the journey rail is the way
+        // out without saving. A third exit only adds a decision.
+        <div className="mt-6 flex justify-end border-t border-color-border pt-5">
           <Button
             variant="primary"
             size="responsive"
