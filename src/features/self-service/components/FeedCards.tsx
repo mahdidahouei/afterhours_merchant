@@ -3,7 +3,7 @@ import { errorMessage } from "@/lib/errors";
 import { Button } from "@/ui/Button";
 import { useDisconnectSocial, useStartSocialConnect } from "../api/queries";
 import type { SocialConnection, SocialProvider } from "../api/types";
-import { socialReturnUrl } from "../session/socialReturn";
+import { markSocialPending, socialReturnUrl } from "../session/socialReturn";
 
 const PROVIDERS: { id: SocialProvider; label: string }[] = [
   { id: "instagram", label: "Instagram" },
@@ -22,8 +22,9 @@ type Props = {
  * A real OAuth handshake: `POST /claim/social/{provider}/connect` hands back the
  * provider's consent screen, the browser leaves for it, and the provider's
  * callback records the grant before redirecting to the `redirectTo` we asked
- * for. That URL carries a marker (see `session/socialReturn.ts`) so the return
- * keeps its session and lands back on this step.
+ * for — this page, undecorated. That the trip is a return, rather than someone
+ * arriving fresh, is remembered in `session/socialReturn.ts`, which is what
+ * keeps the session alive across it.
  *
  * Because the whole thing leaves the site, the only honest report of what
  * happened is the claim we re-read on the way back: if the provider is in
@@ -47,8 +48,14 @@ export function FeedCards({ connections, returnedFrom }: Props) {
     start.reset();
     disconnect.reset();
     start.mutate(
-      { provider, redirectTo: socialReturnUrl(provider) },
-      { onSuccess: ({ authorizeUrl }) => window.location.assign(authorizeUrl) },
+      { provider, redirectTo: socialReturnUrl() },
+      {
+        onSuccess: ({ authorizeUrl }) => {
+          // Mark before leaving: once `assign` runs, nothing else here does.
+          markSocialPending(provider);
+          window.location.assign(authorizeUrl);
+        },
+      },
     );
   };
 

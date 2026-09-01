@@ -138,7 +138,7 @@ export default function SelfServicePage() {
     queryClient.removeQueries({ queryKey: claimKeys.claim });
   }, [queryClient]);
 
-  /* Take the marker out of the address bar; a reload is a normal visit again. */
+  /* Consume the mark, so a later reload is a normal visit again. */
   useEffect(() => {
     if (socialReturn.current) clearSocialReturn();
   }, []);
