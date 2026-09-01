@@ -1,7 +1,7 @@
 import { ProblemError, type ProblemBody, type ProblemCode } from "@/lib/errors";
 import { clearToken, readToken, writeToken } from "../session/tokenStore";
 import { httpOwnerApi, type OwnerApi } from "./http";
-import { platformLabel } from "./types";
+import { CODE_LENGTH, platformLabel } from "./types";
 import type {
   Claim,
   ClaimStatus,
@@ -40,7 +40,7 @@ const CODE_TTL_MS = 5 * 60 * 1000;
 const RESEND_AFTER_MS = 30 * 1000;
 
 /** The code that always fails. Anything else is accepted. */
-const WRONG_CODE = "000000";
+const WRONG_CODE = "0".repeat(CODE_LENGTH);
 
 const wait = (ms = LATENCY_MS) => new Promise((resolve) => setTimeout(resolve, ms));
 

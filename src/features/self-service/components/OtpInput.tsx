@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/cn";
+import { CODE_LENGTH } from "../api/types";
 
 type Props = {
   value: string;
   onChange: (value: string) => void;
   /** Fired when the last box is filled, so the owner needn't press a button. */
   onComplete?: (value: string) => void;
+  /** Defaults to the contract's code length; boxes are drawn from this. */
   length?: number;
   hasError?: boolean;
   disabled?: boolean;
@@ -24,7 +26,7 @@ export function OtpInput({
   value,
   onChange,
   onComplete,
-  length = 6,
+  length = CODE_LENGTH,
   hasError,
   disabled,
 }: Props) {

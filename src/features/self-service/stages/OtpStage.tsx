@@ -3,12 +3,11 @@ import { ArrowLeft } from "iconsax-reactjs";
 import { errorMessage, isProblem, ProblemError } from "@/lib/errors";
 import { Button } from "@/ui/Button";
 import { useCreateSession, useSendVerification } from "../api/queries";
+import { CODE_LENGTH } from "../api/types";
 import type { PlaceCandidate, Session, Verification } from "../api/types";
 import { StageHeading, StagePanel } from "../components/ClaimLayout";
 import { OtpInput } from "../components/OtpInput";
 import { isMockApi } from "../api";
-
-const CODE_LENGTH = 6;
 
 type Props = {
   candidate: PlaceCandidate;
@@ -192,7 +191,7 @@ export function OtpStage({
 
       {isMockApi && (
         <p className="mt-5 rounded-[10px] bg-color-background px-3 py-2 text-center font-satoshi text-[12px] text-color-secondary-text">
-          Demo: <strong>000000</strong> shows the error state · any other code works
+          Demo: <strong>00000</strong> shows the error state · any other code works
         </p>
       )}
     </StagePanel>

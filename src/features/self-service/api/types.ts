@@ -351,6 +351,16 @@ export type SendVerificationBody = { placeId: string };
 
 export type CreateSessionBody = { verificationId: string; code: string };
 
+/**
+ * Digits in the SMS code.
+ *
+ * The contract types `code` as a plain string and says nothing about its
+ * length, so this is the one number here that comes from the OTP service rather
+ * than the spec. It drives the input, the submit gate and the mock together —
+ * if the service ever changes it, this is the only line to touch.
+ */
+export const CODE_LENGTH = 5;
+
 export type ListingRequestBody = {
   name: string;
   city: string;

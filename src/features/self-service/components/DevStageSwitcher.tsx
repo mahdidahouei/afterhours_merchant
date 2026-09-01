@@ -146,7 +146,7 @@ export function DevStageSwitcher({ onJump }: Props) {
           </ul>
 
           <p className="border-t border-color-border px-3.5 py-2 font-satoshi text-[11px] leading-[150%] text-color-secondary-text">
-            Mock data · dev only. OTP <strong>000000</strong> fails, account ID{" "}
+            Mock data · dev only. OTP <strong>00000</strong> fails, account ID{" "}
             <strong>0</strong> is rejected; anything else works.
           </p>
         </div>
