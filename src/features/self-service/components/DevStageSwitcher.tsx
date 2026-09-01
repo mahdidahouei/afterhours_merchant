@@ -78,6 +78,13 @@ const TARGETS: Target[] = [
   { label: "7 · Submitted", status: "submitted" },
   { label: "7 · Approved", status: "approved" },
   { label: "7 · Live", status: "live" },
+  {
+    label: "7 · Live, no bookings",
+    status: "live",
+    photos: true,
+    reservation: false,
+    hint: "→ step 6",
+  },
 ];
 
 type Props = {

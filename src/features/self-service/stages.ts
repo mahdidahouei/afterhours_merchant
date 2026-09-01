@@ -1,4 +1,4 @@
-import type { ClaimStatus } from "./api/types";
+import type { Claim, ClaimStatus } from "./api/types";
 import type { JourneyStepId } from "./content/journey";
 import { JOURNEY } from "./content/journey";
 
@@ -58,6 +58,33 @@ export const DRAFTED_ORDER: DraftedStep[] = [
  * predate it, and `SelfServicePage` seeds `draftedStep` from the response.
  */
 export const FIRST_DRAFTED_STEP: DraftedStep = "review";
+
+/**
+ * The screen for a whole claim, including the one case status can't decide.
+ *
+ * Connecting a booking system is not part of what an admin reviews, and it is
+ * the only thing an owner can still usefully do once the claim is out of their
+ * hands. A restaurant that is already in the directory arrives here with the
+ * claim terminal and nothing connected — parking that owner on "With our team"
+ * gives them a dead end when the one thing they came to do is still available.
+ *
+ * So a terminal claim with no platform connected shows step 6 instead, until
+ * they connect one or say they'll do it later (`bookingsSettled`). Everything
+ * before terminal is untouched: bookings is simply the last step there.
+ */
+export function stageForClaim(
+  claim: Claim,
+  draftedStep: DraftedStep,
+  bookingsSettled: boolean,
+): Stage {
+  const stage = stageForStatus(claim.status, draftedStep);
+
+  if (isTerminal(stage) && claim.reservation.length === 0 && !bookingsSettled) {
+    return "bookings";
+  }
+
+  return stage;
+}
 
 export function stageForStatus(status: ClaimStatus, draftedStep: DraftedStep): Stage {
   switch (status) {

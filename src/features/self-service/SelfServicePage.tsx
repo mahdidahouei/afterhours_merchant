@@ -24,7 +24,7 @@ import {
   FIRST_DRAFTED_STEP,
   journeyIndexOf,
   reachableSteps,
-  stageForStatus,
+  stageForClaim,
   STAGE_LABEL,
   type AnonStage,
   type DraftedStep,
@@ -102,6 +102,13 @@ export default function SelfServicePage() {
 
   const claim = useClaim();
 
+  /**
+   * Set when an owner whose claim is already terminal has dealt with bookings —
+   * connected one, or said they'd do it later. Until then they see step 6
+   * rather than a waiting screen. See `stageForClaim`.
+   */
+  const [bookingsSettled, setBookingsSettled] = useState(false);
+
   /** The current screen's chance to save before the rail navigates away. */
   const leaveGuard = useRef<LeaveGuard | null>(null);
 
@@ -139,7 +146,9 @@ export default function SelfServicePage() {
 
   const status = claim.data?.status;
   const stage: Stage =
-    hasToken && status ? stageForStatus(status, draftedStep) : anonStage;
+    hasToken && claim.data
+      ? stageForClaim(claim.data, draftedStep, bookingsSettled)
+      : anonStage;
 
   const milestone = useMilestone(status);
 
@@ -161,6 +170,7 @@ export default function SelfServicePage() {
     setVerification(null);
     setAnonStage("search");
     setDraftedStep(FIRST_DRAFTED_STEP);
+    setBookingsSettled(false);
     setPendingApi(EMPTY_PENDING_API);
   }, [queryClient]);
 
@@ -283,12 +293,33 @@ export default function SelfServicePage() {
             />
           )}
 
-          {stage === "bookings" && (
-            <BookingsStage claim={claim.data} onBack={() => setDraftedStep("photos")} />
-          )}
+          {stage === "bookings" &&
+            (claim.data.status === "drafted" ? (
+              <BookingsStage
+                claim={claim.data}
+                onBack={() => setDraftedStep("photos")}
+              />
+            ) : (
+              // Terminal claim: there is no step behind this one to go back to,
+              // and nothing left to submit.
+              <BookingsStage
+                claim={claim.data}
+                mode="connect-only"
+                onSettled={() => setBookingsSettled(true)}
+              />
+            ))}
 
           {(stage === "submitted" || stage === "approved" || stage === "live") && (
-            <StatusStage claim={claim.data} onRestart={() => void restart()} />
+            <StatusStage
+              claim={claim.data}
+              onRestart={() => void restart()}
+              // Only reachable after they skipped it; the offer stays open.
+              onConnectBookings={
+                claim.data.reservation.length === 0
+                  ? () => setBookingsSettled(false)
+                  : undefined
+              }
+            />
           )}
         </>
       )}

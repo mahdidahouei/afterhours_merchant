@@ -653,7 +653,11 @@ export const mockOwnerApi: OwnerApi = {
   },
 
   async connectReservation({ platformId, integrationId, apiKey }) {
-    const current = requireClaim("drafted");
+    // Deliberately not restricted to `drafted`. Connecting a booking system is
+    // not part of what an admin reviews, and a restaurant already in the
+    // directory arrives with the claim terminal and nothing connected — that
+    // owner is exactly who this endpoint is for.
+    const current = requireClaim("drafted", "submitted", "approved", "live");
 
     // The platform is looked up in the live list rather than a local table, so
     // the name and icon stored on the claim are the real ones.
@@ -687,7 +691,7 @@ export const mockOwnerApi: OwnerApi = {
 
   async disconnectReservation(platformId) {
     await wait();
-    const current = requireClaim("drafted");
+    const current = requireClaim("drafted", "submitted", "approved", "live");
     current.reservation = current.reservation.filter((r) => r.platformId !== platformId);
     current.updatedAt = iso();
     return snapshot();

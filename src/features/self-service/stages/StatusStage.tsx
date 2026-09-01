@@ -1,12 +1,17 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/ui/Button";
-import type { Claim } from "../api/types";
+import { platformLabel, type Claim } from "../api/types";
 import { StagePanel } from "../components/ClaimLayout";
 
 type Props = {
   claim: Claim;
   /** Sign out and start over on another restaurant. */
   onRestart: () => void;
+  /**
+   * Set while no booking platform is connected, so the offer stays open to an
+   * owner who chose "I'll connect later" rather than disappearing on them.
+   */
+  onConnectBookings?: () => void;
 };
 
 /**
@@ -17,8 +22,16 @@ type Props = {
  * is identical, and `submitted` and `approved` both just wait for the page's
  * poll to move them along.
  */
-export function StatusStage({ claim, onRestart }: Props) {
-  if (claim.status === "live") return <LiveScreen claim={claim} onRestart={onRestart} />;
+export function StatusStage({ claim, onRestart, onConnectBookings }: Props) {
+  if (claim.status === "live") {
+    return (
+      <LiveScreen
+        claim={claim}
+        onRestart={onRestart}
+        onConnectBookings={onConnectBookings}
+      />
+    );
+  }
 
   const isApproved = claim.status === "approved";
 
@@ -52,6 +65,8 @@ export function StatusStage({ claim, onRestart }: Props) {
           </div>
         </dl>
 
+        {onConnectBookings && <ConnectOffer onConnect={onConnectBookings} />}
+
         <Link
           to="/"
           className="mt-6 font-satoshi text-[13px] font-medium text-color-primary underline underline-offset-4"
@@ -63,7 +78,34 @@ export function StatusStage({ claim, onRestart }: Props) {
   );
 }
 
-function LiveScreen({ claim, onRestart }: Props) {
+/**
+ * Bookings can still be connected while the claim sits with an admin — it is
+ * not part of what they review. An owner who skipped it shouldn't have to guess
+ * that the offer is still open.
+ */
+function ConnectOffer({ onConnect }: { onConnect: () => void }) {
+  return (
+    <div className="mt-6 w-full rounded-[14px] border border-color-border bg-white px-5 py-4 text-left">
+      <p className="font-satoshi text-[14px] font-semibold text-color-primary-text">
+        Take bookings directly
+      </p>
+      <p className="mt-1 font-satoshi text-[13px] leading-[160%] text-color-secondary-text">
+        Connect your reservation platform and diners book you on Afterhours, with
+        availability synced in realtime. You can do this now — it doesn't wait on us.
+      </p>
+      <Button
+        variant="secondary"
+        size="responsive"
+        onClick={onConnect}
+        className="mt-3.5 h-[44px] rounded-full text-[13px] font-normal"
+      >
+        Connect your bookings
+      </Button>
+    </div>
+  );
+}
+
+function LiveScreen({ claim, onRestart, onConnectBookings }: Props) {
   const profile = claim.profile;
 
   const summary = [
@@ -73,9 +115,15 @@ function LiveScreen({ claim, onRestart }: Props) {
     profile?.menus.length
       ? `${profile.menus.length} ${profile.menus.length === 1 ? "menu" : "menus"}`
       : null,
-    profile?.reservable && profile.reservationPlatforms.length
-      ? `Reservations via ${profile.reservationPlatforms.join(", ")}`
-      : null,
+    // A connected integration outranks the platform names the scan read off the
+    // website: one is live and syncing, the other is something we noticed.
+    claim.reservation.length
+      ? `Realtime bookings via ${claim.reservation
+          .map((r) => platformLabel(r.platformName))
+          .join(" & ")}`
+      : profile?.reservable && profile.reservationPlatforms.length
+        ? `Reservations via ${profile.reservationPlatforms.join(", ")}`
+        : null,
     claim.photos.length
       ? `${claim.photos.length} ${claim.photos.length === 1 ? "photo" : "photos"}`
       : null,
@@ -119,6 +167,8 @@ function LiveScreen({ claim, onRestart }: Props) {
             </ul>
           </div>
         )}
+
+        {onConnectBookings && <ConnectOffer onConnect={onConnectBookings} />}
 
         <div className="mt-7 flex w-full flex-col gap-2.5 tb:flex-row tb:justify-center">
           <Button

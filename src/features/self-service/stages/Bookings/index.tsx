@@ -14,7 +14,19 @@ import { PlatformSteps } from "./PlatformSteps";
 
 type Props = {
   claim: Claim;
-  onBack: () => void;
+  /** Absent once the claim is terminal — there is nothing behind this screen. */
+  onBack?: () => void;
+  /**
+   * What finishing means here.
+   *
+   * "submit" is the end of the claim: connecting or skipping hands it to an
+   * admin. "connect-only" is an owner coming back to a claim that has already
+   * been submitted — usually a restaurant that was already in the directory —
+   * where submitting again would be rejected and there is nothing to submit.
+   */
+  mode?: "submit" | "connect-only";
+  /** connect-only: they connected, or said they'd do it later. */
+  onSettled?: () => void;
 };
 
 /**
@@ -29,7 +41,12 @@ type Props = {
  * is still a complete listing, so both this and "I'll connect later" end the
  * same way: submit the claim for review.
  */
-export function BookingsStage({ claim, onBack }: Props) {
+export function BookingsStage({
+  claim,
+  onBack,
+  mode = "submit",
+  onSettled,
+}: Props) {
   const [platform, setPlatform] = useState<ReservationPlatform | null>(null);
 
   const connect = useConnectReservation();
@@ -37,8 +54,13 @@ export function BookingsStage({ claim, onBack }: Props) {
   const submit = useSubmitClaim();
 
   const isConnected = claim.reservation.length > 0;
+  const isSubmitMode = mode === "submit";
 
   const finish = () => {
+    if (!isSubmitMode) {
+      onSettled?.();
+      return;
+    }
     submit.reset();
     submit.mutate();
   };
@@ -74,9 +96,9 @@ export function BookingsStage({ claim, onBack }: Props) {
       ) : (
         <>
           <StageHeading title="Turn lookers into booked tables.">
-            Connect your reservation platform and diners book you directly on Afterhours —
-            your availability syncs in realtime, and every booking lands in your own
-            system. Free, and set up in about two minutes.
+            {isSubmitMode
+              ? "Connect your reservation platform and diners book you directly on Afterhours — your availability syncs in realtime, and every booking lands in your own system. Free, and set up in about two minutes."
+              : "You're on Afterhours already. Connect your reservation platform and diners can book you directly — your availability syncs in realtime, and every booking lands in your own system. Free, and set up in about two minutes."}
           </StageHeading>
 
           <PlatformPicker
@@ -92,7 +114,7 @@ export function BookingsStage({ claim, onBack }: Props) {
             </p>
           )}
 
-          {submit.isError && (
+          {isSubmitMode && submit.isError && (
             <p role="alert" className="mt-4 font-satoshi text-[13px] text-color-danger">
               {isProblem(submit.error, "profile_incomplete")
                 ? incompleteMessage(submit.error)
@@ -103,13 +125,15 @@ export function BookingsStage({ claim, onBack }: Props) {
           {/* Not sticky: the picker ends in a footnote, and a pinned bar would
               sit on top of it for the whole scroll. */}
           <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-color-border pt-5">
-            <button
-              type="button"
-              onClick={onBack}
-              className="inline-flex items-center gap-1.5 font-satoshi text-[13px] font-medium text-color-secondary-text transition-colors hover:text-color-primary"
-            >
-              <ArrowLeft size={16} /> Back
-            </button>
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="inline-flex items-center gap-1.5 font-satoshi text-[13px] font-medium text-color-secondary-text transition-colors hover:text-color-primary"
+              >
+                <ArrowLeft size={16} /> Back
+              </button>
+            )}
 
             <div className="flex-1" />
 
@@ -121,7 +145,7 @@ export function BookingsStage({ claim, onBack }: Props) {
                 onClick={finish}
                 className="h-[48px] rounded-full px-6 text-[13px] font-medium max-tb:w-full"
               >
-                Submit for review
+                {isSubmitMode ? "Submit for review" : "Done"}
               </Button>
             ) : (
               <button
