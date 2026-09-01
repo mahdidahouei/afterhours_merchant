@@ -180,7 +180,7 @@ because `GET /places` returns none.
 
 ## Backend flag
 
-The API is not live. `endpoints.ts` defines an `OwnerApi` interface with two
+The API is live and in use. `endpoints.ts` defines an `OwnerApi` interface with two
 implementations — `http.ts` (real) and `mock.ts` (in-memory, contract-faithful
 including latency, error codes and status transitions). `VITE_USE_MOCK` picks.
 Default off; `.env.development` turns it on.

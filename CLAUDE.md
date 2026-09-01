@@ -151,11 +151,22 @@ and credentials accumulate across steps — Formitable asks for an API key on st
 1 and a restaurant key on step 2, and both go in one `POST /claim/reservation`.
 `body` lines are markdown and must be rendered as such.
 
-The API is not live yet. `VITE_USE_MOCK=true` (default in development) swaps in
-`api/mock.ts`, a contract-faithful in-memory server that persists its claim to
-localStorage so a reload resumes instead of looking like an expired session.
-Everything above the `OwnerApi` interface cannot tell the difference. Verify with
-`grep -r "Oli Mazi" dist/` that it stays out of production builds.
+The API is live and the app talks to it. `VITE_USE_MOCK` is `false` everywhere;
+setting it to `true` swaps in `api/mock.ts`, which is kept as a rollback and for
+working offline. Everything above the `OwnerApi` interface cannot tell the
+difference. Verify with `grep -r "Oli Mazi" dist/` that it stays out of builds.
+
+**The API allowlists CORS origins.** `localhost:5173` is allowed, so
+`npm run dev` works; `afterhours-merchant.mahdidahouei.com` is not, so the Pages
+deploy fails on every call until someone adds it. That is a backend config
+entry, not something this repo can fix.
+
+Every response carrying a Claim goes through `api/normalize.ts`. The contract
+promises "lists are always lists", and four screens read `claim.photos.length`
+and `claim.reservation.length` unguarded — one `null` where an empty array was
+promised is a white screen. That held for free against the mock, which was
+written alongside these types; against a real server it is an assumption, and
+the boundary is where it costs nothing to stop assuming.
 
 Two controls the design draws still have no field in the contract: menu-file
 language and the primary-platform star. They are marked `PENDING_API` in

@@ -65,24 +65,24 @@ src/
 
 ## Owner self-service
 
-`/claim` is built against an API that is not live yet. Development runs against
-an in-memory stand-in:
+`/claim` runs against the real owner API. `VITE_USE_MOCK` still exists and still
+switches in `api/mock.ts`, but it is `false` everywhere now — development, the
+Pages deploy and production alike. Nothing above the `OwnerApi` interface knows
+the difference, so flipping it back is a one-line rollback if the API goes down
+mid-demo.
 
 ```
-VITE_USE_MOCK=true   # .env.development — the whole flow is clickable
-VITE_USE_MOCK=false  # .env.production  — real endpoints
+VITE_USE_MOCK=false  # everywhere. true swaps in the in-memory stand-in.
 ```
 
-The mock reproduces the contract's latency, status transitions and error codes,
-and it persists the claim to `localStorage` so that reloading resumes rather than
-looking like an expired session. In it, the OTP `000000` fails and any other six
-digits succeed; a credential of `0` is rejected, so the connect failure path is
-reachable. Turning the flag off is the only change needed when the backend ships.
+The mock is tree-shaken out of a `false` build entirely — no seed data, no
+storage helpers, no "Screens" panel.
 
-**Step 6 is never mocked.** `GET /reservation-platforms` and its `/guide` are
-public, live today, and already serve the connect widget, so the mock passes
-both straight through to the real API — the platforms, their logos, the markdown
-instructions and the screen recordings are all the real ones.
+> **The API allowlists CORS origins.** `localhost:5173`, `merchant.afthr.com`,
+> `afthr.com` and `dev-merchant.afthr.com` are on it;
+> `afterhours-merchant.mahdidahouei.com` is **not**, so every call from the Pages
+> deploy fails until it is added. Nothing in this repo can work around that —
+> Pages is static, so there is nothing to proxy through.
 
 The six steps, and what each one calls:
 
@@ -181,10 +181,14 @@ step and setting `BASE_PATH` to `/${{ github.event.repository.name }}/`. Nothing
 in the app changes — every asset URL already resolves against
 `import.meta.env.BASE_URL`.
 
-The Pages build sets `VITE_USE_MOCK=true`: the owner API is not live yet, so
-without it every screen past the search box would be an error state. It also
-turns on the "Screens" jump-to panel, which is what makes the deploy browsable.
-Set it to `false` once the API ships.
+The Pages build sets `VITE_USE_MOCK=false` and points at the dev API through
+`public/config.js`, so the deploy exercises the real thing.
+
+**It will fail on every call until `afterhours-merchant.mahdidahouei.com` is
+added to the API's CORS allowlist.** The requests come back with no
+`Access-Control-Allow-Origin` and the browser drops them before the app sees a
+response — which surfaces as "We couldn't reach Afterhours", since a blocked
+response and an unreachable server are indistinguishable from script.
 
 ### Container
 

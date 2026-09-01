@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import { ownerClient } from "./client";
+import { normalizeClaim } from "./normalize";
 import type {
   Claim,
   ClaimTicketBody,
@@ -89,7 +90,7 @@ export const httpOwnerApi: OwnerApi = {
 
   async createSession(body) {
     const { data } = await api.post<Session>("/sessions", body);
-    return data;
+    return { ...data, claim: normalizeClaim(data.claim) };
   },
 
   async listReservationPlatforms() {
@@ -124,53 +125,53 @@ export const httpOwnerApi: OwnerApi = {
 
   async getClaim() {
     const { data } = await ownerClient.get<Claim>("/claim");
-    return data;
+    return normalizeClaim(data);
   },
 
   async patchPlace(patch) {
     const { data } = await ownerClient.patch<Claim>("/claim/place", patch);
-    return data;
+    return normalizeClaim(data);
   },
 
   async buildProfile(options) {
     const { data } = await ownerClient.post<Claim>("/claim/profile", options ?? {});
-    return data;
+    return normalizeClaim(data);
   },
 
   async saveProfile(profile) {
     const { data } = await ownerClient.put<Claim>("/claim/profile", profile);
-    return data;
+    return normalizeClaim(data);
   },
 
   async addPhoto(file) {
     const form = new FormData();
     form.append("file", file);
     const { data } = await ownerClient.post<Claim>("/claim/photos", form);
-    return data;
+    return normalizeClaim(data);
   },
 
   async movePhoto(photoId, position) {
     const { data } = await ownerClient.patch<Claim>(`/claim/photos/${photoId}`, {
       position,
     });
-    return data;
+    return normalizeClaim(data);
   },
 
   async removePhoto(photoId) {
     const { data } = await ownerClient.delete<Claim>(`/claim/photos/${photoId}`);
-    return data;
+    return normalizeClaim(data);
   },
 
   async connectReservation(body) {
     const { data } = await ownerClient.post<Claim>("/claim/reservation", body);
-    return data;
+    return normalizeClaim(data);
   },
 
   async disconnectReservation(platformId) {
     const { data } = await ownerClient.delete<Claim>(
       `/claim/reservation/${platformId}`,
     );
-    return data;
+    return normalizeClaim(data);
   },
 
   async startSocialConnect(provider, redirectTo) {
@@ -183,11 +184,11 @@ export const httpOwnerApi: OwnerApi = {
 
   async disconnectSocial(provider) {
     const { data } = await ownerClient.delete<Claim>(`/claim/social/${provider}`);
-    return data;
+    return normalizeClaim(data);
   },
 
   async submitClaim() {
     const { data } = await ownerClient.post<Claim>("/claim/submit");
-    return data;
+    return normalizeClaim(data);
   },
 };

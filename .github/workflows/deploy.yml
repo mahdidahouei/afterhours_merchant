@@ -50,13 +50,12 @@ jobs:
           # Served from the root of a custom domain, so no path prefix. (On a
           # bare github.io project site this would be /<repo>/ instead.)
           BASE_PATH: /
-          # Pages is a preview of the UI, and the owner API is not live yet —
-          # without the mock every screen past the search box would be an error
-          # state. This also enables the "Screens" jump-to panel, which is what
-          # makes the deploy browsable.
+          # The owner API is live, so the deploy talks to it. This also drops
+          # the mock and the "Screens" jump-to panel from the bundle.
           #
-          # Set this to false once the real API ships.
-          VITE_USE_MOCK: "true"
+          # NOTE: the API allowlists CORS origins, and this domain has to be on
+          # that list or every call fails from here. See README → Updates.
+          VITE_USE_MOCK: "false"
         run: npm run build
 
       - name: Set custom domain
