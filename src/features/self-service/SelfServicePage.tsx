@@ -18,7 +18,11 @@ import { ClaimLayout } from "./components/ClaimLayout";
 import { DevStageSwitcher } from "./components/DevStageSwitcher";
 import type { Language } from "./stages/Review/MenusSection";
 import type { LeaveGuard } from "./session/leaveGuard";
-import { clearToken, writeToken } from "./session/tokenStore";
+import {
+  clearSocialReturn,
+  readSocialReturn,
+} from "./session/socialReturn";
+import { clearToken, readToken, writeToken } from "./session/tokenStore";
 import {
   draftedStepAt,
   FIRST_DRAFTED_STEP,
@@ -82,10 +86,21 @@ export default function SelfServicePage() {
 
   /* Phase B — which of the four `drafted` screens is showing. Session-only: the
      rail and the Back buttons move it, and nothing persists it. */
-  const [draftedStep, setDraftedStep] = useState<DraftedStep>(FIRST_DRAFTED_STEP);
+  const [draftedStep, setDraftedStep] = useState<DraftedStep>(() =>
+    // Linking a feed happens on the photos step, so that is where they left from
+    // and where they belong on the way back.
+    readSocialReturn() ? "photos" : FIRST_DRAFTED_STEP,
+  );
 
   /** Controls the design draws that have no endpoint yet. */
   const [pendingApi, setPendingApi] = useState<PendingApi>(EMPTY_PENDING_API);
+
+  /**
+   * The provider we've just come back from, if this arrival is an OAuth return.
+   *
+   * Read once, before anything else looks at the URL or the token.
+   */
+  const socialReturn = useRef(readSocialReturn());
 
   /**
    * Whether a session was established *in this visit*.
@@ -94,8 +109,13 @@ export default function SelfServicePage() {
    * here rather than in an effect because `useClaim` reads the token during
    * render — an effect would run one render too late and let an authenticated
    * request escape for a session we are about to discard.
+   *
+   * Coming back from Instagram or TikTok is the one arrival that keeps its
+   * session: the owner never chose to leave, we sent them.
    */
   const [hasToken, setHasToken] = useState(() => {
+    if (socialReturn.current && readToken()) return true;
+
     clearToken();
     return false;
   });
@@ -114,8 +134,14 @@ export default function SelfServicePage() {
 
   /* The query client outlives a route change, so drop the previous claim too. */
   useEffect(() => {
+    if (socialReturn.current) return;
     queryClient.removeQueries({ queryKey: claimKeys.claim });
   }, [queryClient]);
+
+  /* Take the marker out of the address bar; a reload is a normal visit again. */
+  useEffect(() => {
+    if (socialReturn.current) clearSocialReturn();
+  }, []);
 
   /** Dev-only: seed the mock into a status and render that screen. */
   const jumpToScreen = useCallback(
@@ -290,6 +316,7 @@ export default function SelfServicePage() {
               claim={claim.data}
               onBack={() => setDraftedStep("review")}
               onContinue={() => setDraftedStep("bookings")}
+              returnedFrom={socialReturn.current}
             />
           )}
 

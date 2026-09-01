@@ -769,4 +769,8 @@ function connectOnReturn(provider: SocialProvider) {
     } satisfies SocialConnection,
   ];
   claim.updatedAt = iso();
+  // The browser navigates away immediately after this, so an unpersisted
+  // connection would not survive the trip — the owner would come back to a card
+  // still reading "Not connected".
+  persist();
 }

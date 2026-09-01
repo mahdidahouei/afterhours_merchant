@@ -4,7 +4,13 @@ import { cn } from "@/lib/cn";
 import { errorMessage } from "@/lib/errors";
 import { Button } from "@/ui/Button";
 import { useAddPhoto, useMovePhoto, useRemovePhoto } from "../api/queries";
-import { PHOTO_LIMITS, PHOTO_PROMPTS, PHOTO_TARGET, type Claim } from "../api/types";
+import {
+  PHOTO_LIMITS,
+  PHOTO_PROMPTS,
+  PHOTO_TARGET,
+  type Claim,
+  type SocialProvider,
+} from "../api/types";
 import { StageHeading, StagePanel } from "../components/ClaimLayout";
 import { FeedCards } from "../components/FeedCards";
 import { PhotoGrid } from "../components/PhotoGrid";
@@ -13,6 +19,8 @@ type Props = {
   claim: Claim;
   onBack: () => void;
   onContinue: () => void;
+  /** Set when this load is Instagram or TikTok bouncing the owner back. */
+  returnedFrom?: SocialProvider | null;
 };
 
 /** Reject before uploading rather than round-tripping a 413 or a 415. */
@@ -26,7 +34,7 @@ function rejectionReason(file: File): string | null {
   return null;
 }
 
-export function PhotosStage({ claim, onBack, onContinue }: Props) {
+export function PhotosStage({ claim, onBack, onContinue, returnedFrom }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDropping, setIsDropping] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -85,7 +93,7 @@ export function PhotosStage({ claim, onBack, onContinue }: Props) {
         best — guests choose with their eyes.
       </StageHeading>
 
-      <FeedCards connections={claim.social} />
+      <FeedCards connections={claim.social} returnedFrom={returnedFrom} />
 
       <div className="mt-7 flex flex-wrap items-center gap-2">
         <p className="mr-1 font-satoshi text-[11px] font-semibold uppercase tracking-[0.12em] text-color-secondary-text">
