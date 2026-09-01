@@ -24,6 +24,15 @@ function secondsUntil(iso: string): number {
   return Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 1000));
 }
 
+/**
+ * Counts down to `resendAvailableAt`, the one deadline worth showing.
+ *
+ * There is no countdown to `expiresAt`. Two timers on one screen made it look
+ * like two different things were running out, and the expiry one also drove the
+ * primary button — so it would relabel itself mid-entry. Expiry is now only ever
+ * reported by the server, as `code_expired`, which is the one source that
+ * actually decides it.
+ */
 function useCountdown(iso: string): number {
   const [seconds, setSeconds] = useState(() => secondsUntil(iso));
 
@@ -35,9 +44,6 @@ function useCountdown(iso: string): number {
 
   return seconds;
 }
-
-const mmss = (total: number) =>
-  `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 
 export function OtpStage({
   candidate,
@@ -51,21 +57,21 @@ export function OtpStage({
   const session = useCreateSession();
   const resend = useSendVerification();
 
-  const expiresIn = useCountdown(verification.expiresAt);
   const resendIn = useCountdown(verification.resendAvailableAt);
 
   const error = session.error;
-  const isExpired = expiresIn === 0 || isProblem(error, "code_expired");
+  const isExpired = isProblem(error, "code_expired");
   const isLocked = isProblem(error, "too_many_attempts");
   const isWrong = isProblem(error, "invalid_code");
 
   const attemptsLeft =
     error instanceof ProblemError ? error.attemptsRemaining : undefined;
-  const lockedFor = isLocked && error instanceof ProblemError ? error.retryAfter : undefined;
+  const lockedFor =
+    isLocked && error instanceof ProblemError ? error.retryAfter : undefined;
 
   const submit = useCallback(
     (value: string) => {
-      if (value.length !== CODE_LENGTH || isExpired || isLocked) return;
+      if (value.length !== CODE_LENGTH || isLocked) return;
       session.reset();
       session.mutate(
         { verificationId: verification.verificationId, code: value },
@@ -75,7 +81,7 @@ export function OtpStage({
     // `session` is a stable-enough mutation object; re-creating this on every
     // render would defeat OtpInput's completion effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [verification.verificationId, isExpired, isLocked],
+    [verification.verificationId, isLocked],
   );
 
   const sendAgain = () => {
@@ -107,8 +113,8 @@ export function OtpStage({
         }}
         onComplete={submit}
         length={CODE_LENGTH}
-        hasError={Boolean(error) && !isExpired}
-        disabled={session.isPending || isLocked || isExpired}
+        hasError={Boolean(error)}
+        disabled={session.isPending || isLocked}
       />
 
       <div className="mt-4 min-h-[40px] text-center">
@@ -141,36 +147,20 @@ export function OtpStage({
             {errorMessage(error)}
           </p>
         )}
-
-        {!session.isError && !isExpired && expiresIn > 0 && (
-          <p className="font-satoshi text-[13px] text-color-secondary-text">
-            Code expires in {mmss(expiresIn)}
-          </p>
-        )}
       </div>
 
-      {isExpired ? (
-        <Button
-          variant="primary"
-          size="responsive"
-          isLoading={resend.isPending}
-          onClick={sendAgain}
-          className="h-[50px] w-full rounded-full text-[13px] font-medium"
-        >
-          Send a new code
-        </Button>
-      ) : (
-        <Button
-          variant="primary"
-          size="responsive"
-          isLoading={session.isPending}
-          disabled={code.length !== CODE_LENGTH || isLocked}
-          onClick={() => submit(code)}
-          className="h-[50px] w-full rounded-full text-[13px] font-medium"
-        >
-          Verify code
-        </Button>
-      )}
+      {/* One button, one label. It waits for a full code and nothing else —
+          notably not for a clock, which is what made it change under people. */}
+      <Button
+        variant="primary"
+        size="responsive"
+        isLoading={session.isPending}
+        disabled={code.length !== CODE_LENGTH || isLocked}
+        onClick={() => submit(code)}
+        className="h-[50px] w-full rounded-full text-[13px] font-medium"
+      >
+        Verify code
+      </Button>
 
       <div className="mt-4 text-center">
         <button
