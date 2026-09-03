@@ -243,6 +243,14 @@ Runtime caching rules live in `vite.config.ts`. Two must not change: **`.mp4` is
 ~26 MB) and **`config.js` is `NetworkOnly`** (a cached copy points the app at
 the wrong backend after a redeploy).
 
+**A `NetworkOnly` rule is not enough on its own.** Workbox registers the
+precache route before any runtime route, so anything matching `globPatterns`
+is served from the precache and the rule below it never runs. `config.js`
+matches `**/*.js`, so it must also be in `globIgnores` — it is the one file
+whose contents change *after* the build (the Pages workflow injects
+`MAPBOX_TOKEN`), which means its manifest revision never changes and a client
+keeps whatever it cached the first time.
+
 ## Deploy targets
 
 The app ships to two places and must keep working in both: an nginx container,

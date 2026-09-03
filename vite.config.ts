@@ -79,10 +79,26 @@ export default defineConfig({
         // change, and are far better served by the runtime rules below — putting
         // them here would make every deploy re-download ~26 MB.
         globPatterns: ["**/*.{js,css,html,svg}"],
+        // `config.js` must not be precached. It is `NetworkOnly` below for a
+        // reason — a cached copy points the app at the wrong backend after a
+        // redeploy — but a precache route is registered *before* the runtime
+        // ones and wins, so listing it here is what actually enforces that.
+        //
+        // It is also the one file whose contents change after the build: the
+        // Pages workflow injects MAPBOX_TOKEN into `dist/config.js`. Workbox
+        // hashes it before that, so the manifest revision never changes and a
+        // client keeps serving whatever it cached the first time — which is how
+        // a browser that saw one deploy without the token kept an empty one.
+        //
         // The map library is a ~1.9 MB chunk used on one step of one flow.
         // Precaching it would make every first visit pay for it, so it is
         // fetched from the network the first time that step is opened.
-        globIgnores: ["**/node_modules/**", "media/**", "**/mapbox-*.js"],
+        globIgnores: [
+          "**/node_modules/**",
+          "media/**",
+          "**/mapbox-*.js",
+          "config.js",
+        ],
 
         navigateFallback: `${base}index.html`,
         navigateFallbackDenylist: [/config\.js$/],
