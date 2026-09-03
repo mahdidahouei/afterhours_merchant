@@ -186,8 +186,18 @@ megabytes back on every first visit.
 
 The map is a location picker: tapping it moves the pin, and the new coordinate
 is reverse-geocoded through Mapbox to fill the address field, which the owner can
-still type over. The pin glides because Mapbox rewrites the marker's `transform`
-on every frame, so a CSS transition on that property animates it for free.
+still type over. The map itself never moves — the pin goes to where they tapped
+and the ground stays put.
+
+**Animate the coordinate, not the transform.** Mapbox rewrites the marker's
+`transform` on every frame of a pan or zoom, so a CSS transition on that property
+animates the map's own movement too and the pin visibly lags a drag. The
+coordinate is interpolated frame by frame instead.
+
+**Style light, always.** The app has no dark theme — nothing in `tokens.css`, no
+`darkMode` in the Tailwind config — so reading `prefers-color-scheme` put a night
+map inside a white page. Switch on an app theme if one ever lands, never on the
+OS.
 
 **Neither the pin nor the address can be saved.** `PATCH /claim/place` takes
 name, phone, websiteUri and neighbourhood; both are held in `DetailsStage` and
