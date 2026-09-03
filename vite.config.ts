@@ -36,6 +36,10 @@ export default defineConfig({
           "vendor-motion": ["motion"],
           "vendor-query": ["@tanstack/react-query"],
           "vendor-forms": ["react-hook-form", "@hookform/resolvers", "zod"],
+          // Named so the service worker can skip it — see `globIgnores`. It is
+          // also lazily imported, so this chunk is only ever fetched by the
+          // details step.
+          "mapbox-gl": ["mapbox-gl"],
         },
       },
     },
@@ -75,7 +79,10 @@ export default defineConfig({
         // change, and are far better served by the runtime rules below — putting
         // them here would make every deploy re-download ~26 MB.
         globPatterns: ["**/*.{js,css,html,svg}"],
-        globIgnores: ["**/node_modules/**", "media/**"],
+        // The map library is a ~1.9 MB chunk used on one step of one flow.
+        // Precaching it would make every first visit pay for it, so it is
+        // fetched from the network the first time that step is opened.
+        globIgnores: ["**/node_modules/**", "media/**", "**/mapbox-*.js"],
 
         navigateFallback: `${base}index.html`,
         navigateFallbackDenylist: [/config\.js$/],

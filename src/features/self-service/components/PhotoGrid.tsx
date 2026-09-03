@@ -69,7 +69,7 @@ export function PhotoGrid({ photos, onReorder, onRemove, busyIds, disabled }: Pr
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={ids} strategy={rectSortingStrategy}>
-        <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+        <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {photos.map((photo, index) => (
             <PhotoTile
               key={photo.photoId}

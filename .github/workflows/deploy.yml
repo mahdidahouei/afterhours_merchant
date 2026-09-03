@@ -58,6 +58,31 @@ jobs:
           VITE_USE_MOCK: "false"
         run: npm run build
 
+      - name: Set the Mapbox token
+        # The token is public by design but GitHub's push protection rejects
+        # Mapbox tokens on sight, so it is not committed. Set MAPBOX_TOKEN as a
+        # repository secret to switch the details map on; without it the step
+        # falls back to the address and a Google Maps link.
+        env:
+          MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
+        run: |
+          if [ -n "$MAPBOX_TOKEN" ]; then
+            node -e '
+              const fs = require("fs");
+              const p = "dist/config.js";
+              fs.writeFileSync(
+                p,
+                fs.readFileSync(p, "utf8").replace(
+                  /MAPBOX_TOKEN:\s*""/,
+                  `MAPBOX_TOKEN: ${JSON.stringify(process.env.MAPBOX_TOKEN)}`,
+                ),
+              );
+            '
+            echo "Mapbox token written into dist/config.js"
+          else
+            echo "No MAPBOX_TOKEN secret set — the map will fall back to the address."
+          fi
+
       - name: Set custom domain
         # Pages reads CNAME from the published artifact. Without it, deploying
         # from Actions can clear the custom domain configured in Settings and

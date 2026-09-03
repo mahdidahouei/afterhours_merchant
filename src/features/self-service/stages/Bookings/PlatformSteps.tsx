@@ -159,7 +159,7 @@ export function PlatformSteps({
         </span>
       </div>
 
-      <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
+      <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_420px]">
         <div>
           {/* The API's titles already read "Step 1: …", so no number is added. */}
           <h2 className="font-lora text-[22px] font-medium text-color-primary-text tb:text-[25px]">
@@ -274,7 +274,7 @@ export function PlatformSteps({
 
 function GuideSkeleton() {
   return (
-    <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
+    <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_420px]">
       <div>
         <Skeleton isLoaded={false} className="h-7 w-2/3" />
         <div className="mt-5 flex flex-col gap-3">

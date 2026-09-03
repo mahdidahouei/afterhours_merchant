@@ -74,7 +74,7 @@ export function ContactSection({
         />
       </div>
 
-      <fieldset className="flex flex-col gap-3.5">
+      <fieldset className="grid gap-3.5 tb:grid-cols-2">
         <legend className="mb-1 font-satoshi text-[13px] font-medium text-color-primary-text">
           Social
         </legend>
@@ -211,7 +211,10 @@ function HandleField({
           "focus-within:border-[color:var(--color-field-focus)]",
         )}
       >
-        <span aria-hidden className="pl-3.5 font-satoshi text-[15px] text-color-secondary-text">
+        <span
+          aria-hidden
+          className="pl-3.5 font-satoshi text-[15px] text-color-secondary-text"
+        >
           @
         </span>
         <input

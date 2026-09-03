@@ -147,6 +147,21 @@ the build it started with until it next loads — except when it asks for a lazy
 chunk the deploy has deleted, which reloads it automatically rather than
 blanking the section.
 
+## Maps
+
+The details step draws the listing on Mapbox. The token is public by design but
+GitHub's push protection rejects Mapbox tokens, so it is never committed:
+
+```bash
+echo 'VITE_MAPBOX_TOKEN=pk.…' > .env.development.local   # gitignored
+```
+
+For the Pages deploy, set a repository secret named `MAPBOX_TOKEN` — the
+workflow writes it into `dist/config.js` after the build. In Kubernetes it goes
+in the ConfigMap beside `API_BASE_URL`.
+
+Without a token the map falls back to the address and a Google Maps link.
+
 ## Configuration
 
 `public/config.js` sets `window.__ENV__` before the app bundle parses:

@@ -1,12 +1,7 @@
-import { useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { errorMessage } from "@/lib/errors";
 import { Button } from "@/ui/Button";
 import { Switch } from "@/ui/Switch";
-import { TextField } from "@/ui/TextField";
-import CallIcon from "@/assets/icons/call.svg?react";
-import SmallShopIcon from "@/assets/icons/small-shop.svg?react";
-import SmallMapIcon from "@/assets/icons/small-map.svg?react";
-import GlobeIcon from "@/assets/icons/global.svg?react";
 import { isMockApi, simulateScanFailure } from "../api";
 import { useBuildProfile, usePatchPlace } from "../api/queries";
 import { write, type Claim, type PlacePatch } from "../api/types";
@@ -16,8 +11,21 @@ import {
   type LeaveGuardRef,
 } from "../session/leaveGuard";
 
-const alwaysLeave = async () => true;
 import { StageHeading, StagePanel } from "../components/ClaimLayout";
+import { DetailField } from "../components/DetailField";
+
+/**
+ * Split out on purpose: mapbox-gl is ~1.9 MB, which is more than the rest of
+ * this feature put together. Loaded eagerly it would be downloaded by everyone
+ * who opens the claim flow, to draw one panel on one step — and precached by
+ * the service worker on top of that. This way it arrives only when the details
+ * step actually renders.
+ */
+const LocationMap = lazy(() =>
+  import("../components/LocationMap").then((m) => ({ default: m.LocationMap })),
+);
+
+const alwaysLeave = async () => true;
 
 type Props = {
   claim: Claim;
@@ -33,8 +41,9 @@ type Props = {
 /**
  * Address is absent on purpose: `PATCH /claim/place` accepts name, phone,
  * websiteUri and neighbourhood, and nothing else. The address is Google's and
- * the directory keys off it, so it is shown but not editable — offering a field
- * that silently discarded what was typed would be worse than showing the truth.
+ * the directory keys off it, so it keeps its place in the grid but is shown
+ * read-only — a field that silently discarded what was typed would be worse
+ * than one that says where the value comes from.
  */
 type Fields = { name: string; phone: string; websiteUri: string };
 
@@ -79,9 +88,6 @@ export function DetailsStage({ claim, onDone, leaveGuard }: Props) {
       fields.websiteUri.trim() !== original.websiteUri
     );
   })();
-
-  const set = (key: keyof Fields) => (event: React.ChangeEvent<HTMLInputElement>) =>
-    setFields((prev) => ({ ...prev, [key]: event.target.value }));
 
   /**
    * Only what actually changed. An omitted key is unchanged; a `Nullable` with
@@ -156,61 +162,88 @@ export function DetailsStage({ claim, onDone, leaveGuard }: Props) {
           : "This is what the directory has on file. Correct anything that's off — then we'll read your website to build your full profile."}
       </StageHeading>
 
-      <div className="flex flex-col gap-3.5">
-        <TextField
-          size="responsive"
-          placeholder="Restaurant name"
-          icon={<SmallShopIcon />}
+      {/* The design's 2 x 2: name and phone, then address and website. */}
+      <div className="grid gap-2.5 tb:grid-cols-2">
+        <DetailField
+          label="Restaurant name"
           value={fields.name}
-          onChange={set("name")}
+          onChange={(value) => setFields((prev) => ({ ...prev, name: value }))}
         />
-        <TextField
-          size="responsive"
-          placeholder="Phone"
-          icon={<CallIcon />}
-          inputMode="tel"
+        <DetailField
+          label="Phone"
           value={fields.phone}
-          onChange={set("phone")}
+          inputMode="tel"
+          autoComplete="tel"
+          onChange={(value) => setFields((prev) => ({ ...prev, phone: value }))}
         />
-        <div className="flex items-start gap-3 rounded-[18px] border border-color-border bg-color-background-3 px-4 py-3.5">
-          <span aria-hidden className="mt-0.5 shrink-0 text-color-secondary-text">
-            <SmallMapIcon />
-          </span>
-          <div className="min-w-0">
+        {/* Read-only, and badged rather than footnoted: a hint below the box
+            would make this cell taller than the one beside it and break the
+            row the design lines up. */}
+        <DetailField
+          label="Address"
+          badge="From Google"
+          value={claim.place.address}
+          readOnly
+        />
+        <DetailField
+          label="Website"
+          badge={isRevisit ? undefined : "Builds your profile"}
+          value={fields.websiteUri}
+          inputMode="url"
+          onChange={(value) => setFields((prev) => ({ ...prev, websiteUri: value }))}
+        />
+      </div>
+
+      {claim.place.location && (
+        <div className="mt-3 overflow-hidden rounded-[16px] border border-color-border">
+          <div className="px-4 py-3">
             <p className="font-satoshi text-[11px] font-semibold uppercase tracking-[0.12em] text-color-secondary-text">
-              Address
+              Location on the map
             </p>
-            <p className="mt-0.5 font-satoshi text-[14px] text-color-primary-text">
-              {claim.place.address}
-            </p>
-            <p className="mt-1 font-satoshi text-[12px] text-color-secondary-text">
-              This comes from your Google listing.{" "}
+            <p className="mt-0.5 font-satoshi text-[13px] text-color-secondary-text">
+              This is where guests will be sent, from your Google listing.{" "}
               <a
                 href="/contact-us"
-                className="underline underline-offset-4 hover:text-color-primary"
+                className="font-medium text-color-primary underline underline-offset-4"
               >
                 Tell us
               </a>{" "}
-              if it's wrong.
+              if the address or pin is wrong.
             </p>
           </div>
+
+          <Suspense
+            fallback={
+              <div className="h-[240px] w-full border-t border-color-border bg-color-background-3 tb:h-[280px]" />
+            }
+          >
+            <LocationMap
+            lat={claim.place.location.lat}
+            lng={claim.place.location.lng}
+            label={claim.place.name}
+            className="h-[240px] w-full border-t border-color-border bg-color-background-3 tb:h-[280px]"
+            fallback={
+              <span className="font-satoshi text-[13px] text-color-secondary-text">
+                {claim.place.address}
+                {claim.place.googleMapsUri && (
+                  <>
+                    {" · "}
+                    <a
+                      href={claim.place.googleMapsUri}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-color-primary underline underline-offset-4"
+                    >
+                      Open in Google Maps
+                    </a>
+                  </>
+                )}
+              </span>
+            }
+            />
+          </Suspense>
         </div>
-        <div>
-          <TextField
-            size="responsive"
-            placeholder="Website"
-            icon={<GlobeIcon />}
-            inputMode="url"
-            value={fields.websiteUri}
-            onChange={set("websiteUri")}
-          />
-          <p className="mt-1.5 pl-1 font-satoshi text-[12px] text-color-secondary-text">
-            {isRevisit
-              ? "Shown on your listing. We won't re-read it — your profile stays as it is."
-              : "We'll read this to build your profile."}
-          </p>
-        </div>
-      </div>
+      )}
 
       {(claim.place.rating !== null || claim.place.googleMapsUri) && (
         <GoogleFacts claim={claim} />

@@ -173,6 +173,30 @@ language and the primary-platform star. They are marked `PENDING_API` in
 `api/types.ts` and hold local state. Everything else that used to be listed here
 has landed — IG/TikTok are real OAuth, bookings are a real integration.
 
+## Maps
+
+`LocationMap` draws the listing's position on the Afterhours Mapbox style, with
+the same restaurant pin the mobile app drops (`assets/self-service/`).
+
+**It is lazily imported and must stay that way.** mapbox-gl is ~1.9 MB — more
+than the rest of this feature together — so it is its own `manualChunks` entry,
+excluded from the service worker's precache by `globIgnores`, and pulled in only
+when the details step renders. Importing it at the top of a module puts two
+megabytes back on every first visit.
+
+The pin is not draggable. The design invites the owner to drag it to their
+entrance, but `PATCH /claim/place` has nowhere to put a corrected latitude and
+longitude — a draggable pin would discard the correction on the next render.
+When the contract grows a location field, set `draggable` and send `dragend`.
+
+The token is a public `pk.` one — scoped by URL restrictions at Mapbox rather
+than by secrecy — but **it is not committed**: GitHub's push protection rejects
+Mapbox tokens on sight. It arrives per environment through the usual runtime
+config path (`window.__ENV__.MAPBOX_TOKEN`): a ConfigMap in Kubernetes, the
+`MAPBOX_TOKEN` secret in the Pages workflow, and `.env.development.local` for
+`npm run dev`. Without one the step falls back to the address and a Google Maps
+link, so a missing token is a degraded screen, never a broken one.
+
 ## Errors
 
 `src/lib/errors/` is the whole system:

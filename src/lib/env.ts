@@ -9,7 +9,7 @@
 
 declare global {
   interface Window {
-    __ENV__?: { API_BASE_URL?: string };
+    __ENV__?: { API_BASE_URL?: string; MAPBOX_TOKEN?: string };
     gtag?: (...args: unknown[]) => void;
     dataLayer?: unknown[];
   }
@@ -22,6 +22,17 @@ export const env = {
     runtime.API_BASE_URL ??
     import.meta.env.VITE_API_BASE_URL ??
     "https://dev-api.afthr.com/api/v1/owner",
+  /**
+   * Mapbox public token for the details map.
+   *
+   * A `pk.` token is designed to ship in the client — it is scoped by URL
+   * restrictions at Mapbox, not kept secret — so it goes through the same
+   * runtime-config path as the API URL, letting an environment swap it without
+   * a rebuild.
+   */
+  mapboxToken:
+    runtime.MAPBOX_TOKEN ?? import.meta.env.VITE_MAPBOX_TOKEN ?? "",
+
   isDev: import.meta.env.DEV,
   /**
    * Serve the owner self-service flow from an in-memory stand-in instead of the
