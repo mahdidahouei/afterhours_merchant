@@ -175,8 +175,12 @@ has landed — IG/TikTok are real OAuth, bookings are a real integration.
 
 ## Maps
 
-`LocationMap` draws the listing's position on the Afterhours Mapbox style, with
-the same restaurant pin the mobile app drops (`assets/self-service/`).
+`LocationMap` draws the listing's position on the Afterhours Mapbox style.
+
+The pin in `assets/self-service/map-marker.png` is the app's own
+`assets/icons/location.png`, recoloured from its charcoal `#3A393F` to the brand
+brown `#321B15` — body only, so the white centre and the antialiased rim survive.
+It is 88 x 102, not square: draw it 38 x 44 or it squashes.
 
 **It is lazily imported and must stay that way.** mapbox-gl is ~1.9 MB — more
 than the rest of this feature together — so it is its own `manualChunks` entry,

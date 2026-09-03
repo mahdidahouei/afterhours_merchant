@@ -113,8 +113,10 @@ export function LocationMap({ lat, lng, label, onPick, fallback, className }: Pr
     const pin = document.createElement("img");
     pin.src = markerUrl;
     pin.alt = "";
+    // The asset is 88 x 102, so the height is not the width — drawing it
+    // square would squash the pin.
     pin.width = 38;
-    pin.height = 38;
+    pin.height = 44;
     pin.style.display = "block";
 
     // `bottom` so the point of the pin sits on the coordinate, not its middle.
