@@ -11,13 +11,18 @@ const STYLE = {
   dark: "mapbox://styles/afterhoursbookings/cm4mls6if005801s5cexocvqt",
 } as const;
 
-const ZOOM = 15.5;
+const ZOOM = 16;
+
+/** Long enough to read as movement, short enough not to feel like waiting. */
+const GLIDE_MS = 400;
 
 type Props = {
   lat: number;
   lng: number;
   /** Read out for anyone who can't see the map. */
   label: string;
+  /** Set to make the map a picker: tapping anywhere moves the pin. */
+  onPick?: (lat: number, lng: number) => void;
   /**
    * Shown instead of the map when it cannot be drawn — no WebGL, no token, a
    * refused style. The block keeps its place either way: a step that silently
@@ -29,23 +34,26 @@ type Props = {
 };
 
 /**
- * The listing's position, on the Afterhours map style.
+ * The listing's position, on the Afterhours map style, with the same pin the
+ * mobile app drops on a restaurant.
  *
- * The pin is the same restaurant marker the mobile app drops, so a place looks
- * the same here as it does to a diner.
+ * With `onPick` it is a location picker: tapping the map moves the pin there.
+ * The pin glides rather than jumping — Mapbox rewrites the marker's `transform`
+ * on every frame of the map's own movement, so a CSS transition on that
+ * property animates the hop for free and costs nothing while panning.
  *
- * Deliberately not interactive. The design invites the owner to drag the pin to
- * their entrance, but `PATCH /claim/place` accepts name, phone, websiteUri and
- * neighbourhood — there is nowhere to put a corrected latitude and longitude, so
- * a draggable pin would throw the correction away on the next render. It shows
- * what the directory has and says where that came from; when the contract grows
- * a location field, make the marker `draggable` and send `dragend`.
- *
- * Scroll-zoom is off for the same reason it always should be inside a scrolling
- * form: the page must not stop moving because the cursor crossed a map.
+ * The map is created once. Later coordinate changes ease the camera and move the
+ * marker instead of tearing the whole thing down, which would flash the tiles
+ * white every time the owner adjusted the pin.
  */
-export function LocationMap({ lat, lng, label, fallback, className }: Props) {
+export function LocationMap({ lat, lng, label, onPick, fallback, className }: Props) {
   const container = useRef<HTMLDivElement>(null);
+  const map = useRef<mapboxgl.Map | null>(null);
+  const marker = useRef<mapboxgl.Marker | null>(null);
+  /** Kept in a ref so changing the handler doesn't rebuild the map. */
+  const pick = useRef(onPick);
+  pick.current = onPick;
+
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -62,15 +70,17 @@ export function LocationMap({ lat, lng, label, fallback, className }: Props) {
     const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
     mapboxgl.accessToken = env.mapboxToken;
 
-    let map: mapboxgl.Map;
+    let created: mapboxgl.Map;
     try {
-      map = new mapboxgl.Map({
+      created = new mapboxgl.Map({
         container: container.current,
         style: prefersDark ? STYLE.dark : STYLE.light,
         center: [lng, lat],
         zoom: ZOOM,
-        interactive: false,
         attributionControl: false,
+        // Panning and zooming are fine; the page must not stop scrolling
+        // because the cursor crossed a map.
+        scrollZoom: false,
       });
     } catch {
       // A bad token or an unsupported browser must not take the step down with
@@ -79,25 +89,47 @@ export function LocationMap({ lat, lng, label, fallback, className }: Props) {
       return;
     }
 
-    map.on("error", () => setFailed(true));
+    created.on("error", () => setFailed(true));
+    created.on("click", (event) => pick.current?.(event.lngLat.lat, event.lngLat.lng));
 
     const pin = document.createElement("img");
     pin.src = markerUrl;
     pin.alt = "";
-    pin.width = 35;
-    pin.height = 43;
+    pin.width = 38;
+    pin.height = 38;
     pin.style.display = "block";
+    pin.style.transition = `transform ${GLIDE_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
 
     // `bottom` so the point of the pin sits on the coordinate, not its middle.
-    const marker = new mapboxgl.Marker({ element: pin, anchor: "bottom" })
+    marker.current = new mapboxgl.Marker({ element: pin, anchor: "bottom" })
       .setLngLat([lng, lat])
-      .addTo(map);
+      .addTo(created);
+
+    map.current = created;
 
     return () => {
-      marker.remove();
-      map.remove();
+      marker.current?.remove();
+      created.remove();
+      map.current = null;
+      marker.current = null;
     };
+    // Built once: the effect below follows later coordinate changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* Follow the coordinate without rebuilding the map. */
+  useEffect(() => {
+    if (!map.current || !marker.current) return;
+
+    marker.current.setLngLat([lng, lat]);
+    map.current.easeTo({ center: [lng, lat], duration: GLIDE_MS });
   }, [lat, lng]);
+
+  /* The cursor should say the map is clickable. */
+  useEffect(() => {
+    const canvas = map.current?.getCanvas();
+    if (canvas) canvas.style.cursor = onPick ? "pointer" : "";
+  }, [onPick]);
 
   if (!env.mapboxToken || failed) {
     return fallback ? (

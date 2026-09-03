@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { errorMessage } from "@/lib/errors";
 import { Button } from "@/ui/Button";
 import { Switch } from "@/ui/Switch";
@@ -11,8 +11,10 @@ import {
   type LeaveGuardRef,
 } from "../session/leaveGuard";
 
+import { Spinner } from "@/ui/Spinner";
 import { TextField } from "@/ui/TextField";
 import { StageHeading, StagePanel } from "../components/ClaimLayout";
+import { reverseGeocode } from "../components/reverseGeocode";
 
 /**
  * Split out on purpose: mapbox-gl is ~1.9 MB, which is more than the rest of
@@ -38,19 +40,13 @@ type Props = {
   leaveGuard?: LeaveGuardRef;
 };
 
-/**
- * Address is absent on purpose: `PATCH /claim/place` accepts name, phone,
- * websiteUri and neighbourhood, and nothing else. The address is Google's and
- * the directory keys off it, so it keeps its place in the grid but is shown
- * read-only — a field that silently discarded what was typed would be worse
- * than one that says where the value comes from.
- */
-type Fields = { name: string; phone: string; websiteUri: string };
+type Fields = { name: string; phone: string; websiteUri: string; address: string };
 
 const fieldsOf = (claim: Claim): Fields => ({
   name: claim.place.name,
   phone: claim.place.phone ?? "",
   websiteUri: claim.place.websiteUri ?? "",
+  address: claim.place.address,
 });
 
 /**
@@ -72,6 +68,48 @@ export function DetailsStage({ claim, onDone, leaveGuard }: Props) {
   const fallbackGuardRef = leaveGuard ?? ownRef;
   const [fields, setFields] = useState<Fields>(() => fieldsOf(claim));
   const [simulateFailure, setSimulateFailure] = useState(false);
+
+  /**
+   * PENDING_API — the pinned location and the address the owner types.
+   *
+   * `PATCH /claim/place` accepts name, phone, websiteUri and neighbourhood.
+   * There is nowhere to send either of these, so both are held here and the
+   * screen says so rather than pretending the correction was filed.
+   */
+  const [pin, setPin] = useState(claim.place.location);
+  const [isLocating, setIsLocating] = useState(false);
+  const geocoding = useRef<AbortController | null>(null);
+  const [hasMovedPin, setHasMovedPin] = useState(false);
+
+  /* Drop a pin, then fill the address in from wherever it landed. */
+  const pickLocation = (lat: number, lng: number) => {
+    setPin({ lat, lng });
+    setHasMovedPin(true);
+
+    // One lookup at a time: an earlier, slower reply must not land last and
+    // overwrite the address for the pin the owner can actually see.
+    geocoding.current?.abort();
+    const controller = new AbortController();
+    geocoding.current = controller;
+
+    setIsLocating(true);
+    void reverseGeocode(lat, lng, controller.signal)
+      .then((address) => {
+        if (address) setFields((prev) => ({ ...prev, address }));
+      })
+      .catch(() => {
+        // An address we couldn't look up is not an error worth a banner: the
+        // pin moved, and the field is still the owner's to type in.
+      })
+      .finally(() => {
+        if (geocoding.current === controller) {
+          geocoding.current = null;
+          setIsLocating(false);
+        }
+      });
+  };
+
+  useEffect(() => () => geocoding.current?.abort(), []);
 
   const patchPlace = usePatchPlace();
   const buildProfile = useBuildProfile();
@@ -182,17 +220,23 @@ export function DetailsStage({ claim, onDone, leaveGuard }: Props) {
             setFields((prev) => ({ ...prev, phone: event.target.value }))
           }
         />
-        {/* Read-only: `PATCH /claim/place` has no address field, so an editable
-            one would discard whatever was typed. */}
         <div>
           <TextField
             size="responsive"
             placeholder="Address"
-            value={claim.place.address}
-            readOnly
-            disabled
+            value={fields.address}
+            onChange={(event) =>
+              setFields((prev) => ({ ...prev, address: event.target.value }))
+            }
+            trailing={isLocating ? <Spinner small /> : undefined}
           />
-          <FieldHint>From your Google listing.</FieldHint>
+          <FieldHint>
+            {isLocating
+              ? "Looking up the address…"
+              : hasMovedPin
+                ? "From the pin you dropped. Edit it if it's not quite right."
+                : "From your Google listing. Move the pin below to change it."}
+          </FieldHint>
         </div>
 
         <div>
@@ -213,21 +257,15 @@ export function DetailsStage({ claim, onDone, leaveGuard }: Props) {
         </div>
       </div>
 
-      {claim.place.location && (
+      {pin && (
         <div className="mt-3 overflow-hidden rounded-[16px] border border-color-border">
           <div className="px-4 py-3">
             <p className="font-satoshi text-[11px] font-semibold uppercase tracking-[0.12em] text-color-secondary-text">
               Location on the map
             </p>
             <p className="mt-0.5 font-satoshi text-[13px] text-color-secondary-text">
-              This is where guests will be sent, from your Google listing.{" "}
-              <a
-                href="/contact-us"
-                className="font-medium text-color-primary underline underline-offset-4"
-              >
-                Tell us
-              </a>{" "}
-              if the address or pin is wrong.
+              This is where guests will be sent. Not quite right? Tap the map to move the
+              pin to your entrance.
             </p>
           </div>
 
@@ -237,30 +275,43 @@ export function DetailsStage({ claim, onDone, leaveGuard }: Props) {
             }
           >
             <LocationMap
-            lat={claim.place.location.lat}
-            lng={claim.place.location.lng}
-            label={claim.place.name}
-            className="h-[240px] w-full border-t border-color-border bg-color-background-3 tb:h-[280px]"
-            fallback={
-              <span className="font-satoshi text-[13px] text-color-secondary-text">
-                {claim.place.address}
-                {claim.place.googleMapsUri && (
-                  <>
-                    {" · "}
-                    <a
-                      href={claim.place.googleMapsUri}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-color-primary underline underline-offset-4"
-                    >
-                      Open in Google Maps
-                    </a>
-                  </>
-                )}
-              </span>
-            }
+              lat={pin.lat}
+              lng={pin.lng}
+              onPick={pickLocation}
+              label={claim.place.name}
+              className="h-[240px] w-full border-t border-color-border bg-color-background-3 tb:h-[280px]"
+              fallback={
+                <span className="font-satoshi text-[13px] text-color-secondary-text">
+                  {fields.address}
+                  {claim.place.googleMapsUri && (
+                    <>
+                      {" · "}
+                      <a
+                        href={claim.place.googleMapsUri}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-color-primary underline underline-offset-4"
+                      >
+                        Open in Google Maps
+                      </a>
+                    </>
+                  )}
+                </span>
+              }
             />
           </Suspense>
+
+          {/*
+            PENDING_API — `PATCH /claim/place` takes name, phone, websiteUri and
+            neighbourhood. Neither the address nor the pin has a field to go in,
+            so both stay on this screen. Said out loud rather than left for the
+            owner to discover after they have moved it.
+          */}
+          {hasMovedPin && (
+            <p className="border-t border-color-border px-4 py-2.5 font-satoshi text-[12px] text-color-secondary-text">
+              We can't file a moved pin yet — it stays on this screen for now.
+            </p>
+          )}
         </div>
       )}
 

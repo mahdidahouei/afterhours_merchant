@@ -387,6 +387,17 @@ export type PendingApi = {
   primaryPlatform: string | null;
 };
 
+/**
+ * Also pending, and held on the details screen rather than here because it is
+ * only ever that one screen's business: the **address** the owner types and the
+ * **location** they pin. `PlacePatch` accepts name, phone, websiteUri and
+ * neighbourhood, so neither can be sent.
+ *
+ * Adding `address: Nullable<string>` and `location: { lat, lng }` to
+ * `PATCH /claim/place` is all that is needed — `DetailsStage.buildPatch` is
+ * where they would go in.
+ */
+
 export const EMPTY_PENDING_API: PendingApi = {
   menuFileLanguages: {},
   primaryPlatform: null,

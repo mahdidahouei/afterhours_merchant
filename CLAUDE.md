@@ -184,10 +184,15 @@ excluded from the service worker's precache by `globIgnores`, and pulled in only
 when the details step renders. Importing it at the top of a module puts two
 megabytes back on every first visit.
 
-The pin is not draggable. The design invites the owner to drag it to their
-entrance, but `PATCH /claim/place` has nowhere to put a corrected latitude and
-longitude — a draggable pin would discard the correction on the next render.
-When the contract grows a location field, set `draggable` and send `dragend`.
+The map is a location picker: tapping it moves the pin, and the new coordinate
+is reverse-geocoded through Mapbox to fill the address field, which the owner can
+still type over. The pin glides because Mapbox rewrites the marker's `transform`
+on every frame, so a CSS transition on that property animates it for free.
+
+**Neither the pin nor the address can be saved.** `PATCH /claim/place` takes
+name, phone, websiteUri and neighbourhood; both are held in `DetailsStage` and
+the screen says so. Adding `address` and `location` to `PlacePatch` is all that
+is needed — `buildPatch` is where they go.
 
 The token is a public `pk.` one — scoped by URL restrictions at Mapbox rather
 than by secrecy — but **it is not committed**: GitHub's push protection rejects
