@@ -72,7 +72,8 @@
   /* ── Text fields ──────────────────────────────────────────────────────── */
   /* Mirrors the mobile app's outlined text field (light scheme). */
   --color-field-border: #6b6357;
-  --color-field-focus: #8a6535;
+  --color-field-focus-rgb: 138 101 53;
+  --color-field-focus: rgb(var(--color-field-focus-rgb));
   --color-field-error: #711007;
   --color-field-value: #262626;
   --color-field-disabled: #cfcfcf;

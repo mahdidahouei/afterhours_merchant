@@ -62,6 +62,20 @@ export default {
         shimmer: {
           "100%": { transform: "translateX(100%)" },
         },
+        // The scanning step's website preview: skeleton rows breathe while a
+        // line sweeps down the page being read.
+        "scan-pulse": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.4" },
+        },
+        "scan-sweep": {
+          "0%, 100%": { top: "6px" },
+          "50%": { top: "calc(100% - 40px)" },
+        },
+      },
+      animation: {
+        "scan-pulse": "scan-pulse 1.8s ease infinite",
+        "scan-sweep": "scan-sweep 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite",
       },
     },
   },

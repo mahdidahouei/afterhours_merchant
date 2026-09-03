@@ -216,6 +216,20 @@ config path (`window.__ENV__.MAPBOX_TOKEN`): a ConfigMap in Kubernetes, the
 `npm run dev`. Without one the step falls back to the address and a Google Maps
 link, so a missing token is a degraded screen, never a broken one.
 
+## The scanning step
+
+`ScanPreview` is the little browser window that sweeps a scan line down a
+skeleton page while `POST /claim/profile` runs. It is decoration and says so:
+`aria-hidden`, because the server reports no progress at all during `scanning` —
+the bar, the beats and the "what we're finding" list are all paced from a client
+timer, and the bar deliberately stops at 90% because only a status change can
+finish that screen.
+
+Its two animations live in `tailwind.config.ts` as `scan-pulse` and
+`scan-sweep`. Don't fold them into the existing `shimmer` keyframe — that one is
+`ui/Skeleton`'s translate sweep and does something else. Both carry
+`motion-reduce:animate-none`.
+
 ## Errors
 
 `src/lib/errors/` is the whole system:
