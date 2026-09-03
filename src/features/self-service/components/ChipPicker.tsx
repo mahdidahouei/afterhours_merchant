@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/cn";
+import { TextField } from "@/ui/TextField";
 import { AddChip, Chip } from "@/ui/Chip";
 
 type Props = {
@@ -120,13 +121,15 @@ export function ChipPicker({
           >
             {options.length > 8 && (
               <div className="border-b border-color-border p-2.5">
-                <input
-                  type="text"
+                {/* TextField rather than SearchField: this filters a list
+                    already in memory, so the debounce SearchField adds would be
+                    latency for nothing. */}
+                <TextField
+                  size="responsive"
                   autoFocus
                   value={filter}
                   onChange={(event) => setFilter(event.target.value)}
                   placeholder={`Search ${label.toLowerCase()}`}
-                  className="w-full rounded-[10px] border border-color-border px-3 py-2 font-satoshi text-sm outline-none focus:border-[color:var(--color-field-focus)]"
                 />
               </div>
             )}

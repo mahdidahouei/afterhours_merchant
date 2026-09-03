@@ -1,5 +1,6 @@
 import { cn } from "@/lib/cn";
 import { TextField } from "@/ui/TextField";
+import { Textarea } from "@/ui/Textarea";
 import { ChipPicker } from "../../components/ChipPicker";
 import type { Profile, Taxonomy } from "../../api/types";
 import { PROFILE_LIMITS, trimmed } from "./useProfileDraft";
@@ -102,20 +103,16 @@ export function StorySection({ draft, taxonomy, update, missing }: Props) {
               </span>
             </div>
 
-            <textarea
+            <Textarea
               id="profile-description"
+              size="full-width"
               rows={6}
               value={description}
               maxLength={PROFILE_LIMITS.description}
+              hasError={missing.has("description")}
               onChange={(event) => update("description", trimmed(event.target.value))}
               placeholder="What should a guest know before they book?"
-              className={cn(
-                "mt-2 w-full resize-y rounded-[12px] border px-4 py-3",
-                "font-satoshi text-[14px] leading-[160%] text-color-primary-text outline-none transition-colors",
-                missing.has("description")
-                  ? "border-color-danger"
-                  : "border-color-border focus:border-[color:var(--color-field-focus)]",
-              )}
+              className="mt-2"
             />
           </div>
         </div>

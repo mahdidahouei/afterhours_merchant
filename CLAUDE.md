@@ -260,7 +260,27 @@ The service worker's `runtimeCaching` patterns match on a path *segment*
 (`includes("/fonts/")`), never on the string start — a root-anchored pattern
 silently stops matching under a base.
 
+## Reusable widgets
+
+**Use `ui/` primitives. Do not hand-roll a field because a design draws it
+differently.** Every text input in the app is `ui/TextField`, every multi-line
+one is `ui/Textarea`; a bespoke lookalike is a consistency bug even when it
+matches the mock more closely. When a design and the shared widget disagree, the
+widget gets updated — one change, everywhere — rather than forked locally.
+
+The two raw `<input>`s left in `features/self-service` both earn it: the hidden
+`type="file"` behind the photo picker, and the per-digit boxes in `OtpInput`,
+which is a single field made of six elements and has no shared equivalent.
+
+`TextField.trailing` reserves 3rem. It is for an icon or a spinner; a text pill
+put there runs straight over the value. Notes go under the field instead.
+
 ## Runtime configuration
+
+Read every runtime value with `||`, never `??`. `config.js` ships placeholders
+as empty strings and a ConfigMap may mount a partial one; `""` is not nullish,
+so `??` accepts it as configured and silently skips the build-time fallback.
+That is exactly how the Mapbox token resolved to nothing in development.
 
 `public/config.js` assigns `window.__ENV__` before the bundle parses. In
 Kubernetes a per-environment ConfigMap is mounted over that path, so one image

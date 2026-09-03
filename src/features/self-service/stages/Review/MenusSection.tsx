@@ -1,5 +1,6 @@
 import { cn } from "@/lib/cn";
 import { Button } from "@/ui/Button";
+import { TextField } from "@/ui/TextField";
 import type { Menu, MenuFile, Profile } from "../../api/types";
 
 /** The contract's three file types. "webpage", not "link". */
@@ -48,12 +49,12 @@ export function MenusSection({ draft, update, languages, onLanguageChange }: Pro
           className="rounded-[16px] border border-color-border bg-color-background-3 p-4"
         >
           <div className="flex items-center gap-2">
-            <input
-              type="text"
+            <TextField
+              size="responsive"
+              containerClassName="min-w-0 flex-1"
               value={menu.title}
               placeholder="Menu name"
               onChange={(event) => patchMenu(menuIndex, { title: event.target.value })}
-              className="min-w-0 flex-1 rounded-[10px] border border-color-border bg-white px-3 py-2 font-satoshi text-sm font-semibold outline-none focus:border-[color:var(--color-field-focus)]"
             />
             <button
               type="button"
@@ -118,8 +119,9 @@ export function MenusSection({ draft, update, languages, onLanguageChange }: Pro
                   </div>
 
                   <div className="mt-2.5 flex flex-col gap-2 tb:flex-row">
-                    <input
-                      type="text"
+                    <TextField
+                      size="responsive"
+                      containerClassName="min-w-0 tb:w-[40%]"
                       value={file.title ?? ""}
                       placeholder="File name"
                       onChange={(event) =>
@@ -127,17 +129,16 @@ export function MenusSection({ draft, update, languages, onLanguageChange }: Pro
                           title: event.target.value.trim() || null,
                         })
                       }
-                      className="min-w-0 rounded-[10px] border border-color-border px-3 py-2 font-satoshi text-sm outline-none focus:border-[color:var(--color-field-focus)] tb:w-[40%]"
                     />
-                    <input
-                      type="url"
+                    <TextField
+                      size="responsive"
+                      containerClassName="min-w-0 flex-1"
                       inputMode="url"
                       value={file.link}
                       placeholder="https://…"
                       onChange={(event) =>
                         patchFile(menuIndex, fileIndex, { link: event.target.value })
                       }
-                      className="min-w-0 flex-1 rounded-[10px] border border-color-border px-3 py-2 font-satoshi text-sm outline-none focus:border-[color:var(--color-field-focus)]"
                     />
                   </div>
 

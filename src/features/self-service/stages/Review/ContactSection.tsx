@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { cn } from "@/lib/cn";
 import { AddChip, Chip } from "@/ui/Chip";
 import { Switch } from "@/ui/Switch";
 import { TextField } from "@/ui/TextField";
@@ -150,8 +149,9 @@ export function ContactSection({
               </div>
 
               <div className="mt-3 flex gap-2">
-                <input
-                  type="text"
+                <TextField
+                  size="responsive"
+                  containerClassName="min-w-0 flex-1"
                   value={newPlatform}
                   onChange={(event) => setNewPlatform(event.target.value)}
                   onKeyDown={(event) => {
@@ -161,7 +161,6 @@ export function ContactSection({
                     }
                   }}
                   placeholder="Formitable, Guestplan…"
-                  className="min-w-0 flex-1 rounded-[10px] border border-color-border px-3 py-2 font-satoshi text-sm outline-none focus:border-[color:var(--color-field-focus)]"
                 />
                 <AddChip onClick={addPlatform} label="Add" />
               </div>
@@ -200,32 +199,21 @@ function HandleField({
   onChange: (value: string) => void;
   placeholder?: string;
 }) {
+  // The shared field, with the @ as its leading icon — the same slot every
+  // other form in the app uses for one.
   return (
-    <label className="block">
-      <span className="mb-1.5 block font-satoshi text-[12px] font-medium text-color-secondary-text">
-        {label}
-      </span>
-      <span
-        className={cn(
-          "flex items-center rounded-[12px] border border-color-border bg-white",
-          "focus-within:border-[color:var(--color-field-focus)]",
-        )}
-      >
-        <span
-          aria-hidden
-          className="pl-3.5 font-satoshi text-[15px] text-color-secondary-text"
-        >
+    <TextField
+      size="responsive"
+      placeholder={placeholder ?? label}
+      aria-label={label}
+      icon={
+        <span aria-hidden className="font-satoshi text-[15px] text-color-secondary-text">
           @
         </span>
-        <input
-          type="text"
-          value={value}
-          placeholder={placeholder}
-          onChange={(event) => onChange(event.target.value.replace(/^@/, ""))}
-          className="min-w-0 flex-1 bg-transparent px-2.5 py-3 font-satoshi text-[15px] font-medium text-color-primary-text outline-none placeholder:font-normal placeholder:text-color-secondary-text"
-        />
-      </span>
-    </label>
+      }
+      value={value}
+      onChange={(event) => onChange(event.target.value.replace(/^@/, ""))}
+    />
   );
 }
 

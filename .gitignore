@@ -12,3 +12,6 @@ dev-dist
 
 npm-debug.log*
 yarn-error.log*
+
+# HAR captures saved while debugging. Useful locally, not source.
+network_logs/

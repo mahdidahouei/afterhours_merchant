@@ -11,8 +11,8 @@ import {
   type LeaveGuardRef,
 } from "../session/leaveGuard";
 
+import { TextField } from "@/ui/TextField";
 import { StageHeading, StagePanel } from "../components/ClaimLayout";
-import { DetailField } from "../components/DetailField";
 
 /**
  * Split out on purpose: mapbox-gl is ~1.9 MB, which is more than the rest of
@@ -163,35 +163,54 @@ export function DetailsStage({ claim, onDone, leaveGuard }: Props) {
       </StageHeading>
 
       {/* The design's 2 x 2: name and phone, then address and website. */}
-      <div className="grid gap-2.5 tb:grid-cols-2">
-        <DetailField
-          label="Restaurant name"
+      <div className="grid items-start gap-3.5 tb:grid-cols-2">
+        <TextField
+          size="responsive"
+          placeholder="Restaurant name"
           value={fields.name}
-          onChange={(value) => setFields((prev) => ({ ...prev, name: value }))}
+          onChange={(event) =>
+            setFields((prev) => ({ ...prev, name: event.target.value }))
+          }
         />
-        <DetailField
-          label="Phone"
-          value={fields.phone}
+        <TextField
+          size="responsive"
+          placeholder="Phone"
           inputMode="tel"
           autoComplete="tel"
-          onChange={(value) => setFields((prev) => ({ ...prev, phone: value }))}
+          value={fields.phone}
+          onChange={(event) =>
+            setFields((prev) => ({ ...prev, phone: event.target.value }))
+          }
         />
-        {/* Read-only, and badged rather than footnoted: a hint below the box
-            would make this cell taller than the one beside it and break the
-            row the design lines up. */}
-        <DetailField
-          label="Address"
-          badge="From Google"
-          value={claim.place.address}
-          readOnly
-        />
-        <DetailField
-          label="Website"
-          badge={isRevisit ? undefined : "Builds your profile"}
-          value={fields.websiteUri}
-          inputMode="url"
-          onChange={(value) => setFields((prev) => ({ ...prev, websiteUri: value }))}
-        />
+        {/* Read-only: `PATCH /claim/place` has no address field, so an editable
+            one would discard whatever was typed. */}
+        <div>
+          <TextField
+            size="responsive"
+            placeholder="Address"
+            value={claim.place.address}
+            readOnly
+            disabled
+          />
+          <FieldHint>From your Google listing.</FieldHint>
+        </div>
+
+        <div>
+          <TextField
+            size="responsive"
+            placeholder="Website"
+            inputMode="url"
+            value={fields.websiteUri}
+            onChange={(event) =>
+              setFields((prev) => ({ ...prev, websiteUri: event.target.value }))
+            }
+          />
+          <FieldHint>
+            {isRevisit
+              ? "Shown on your listing. We won't re-read it."
+              : "This is what builds your profile."}
+          </FieldHint>
+        </div>
       </div>
 
       {claim.place.location && (
@@ -309,6 +328,24 @@ export function DetailsStage({ claim, onDone, leaveGuard }: Props) {
 }
 
 /** Rating and review count only exist after verification — never in search. */
+/**
+ * A note under a field.
+ *
+ * The design draws these as pills on the label row, but the shared TextField
+ * floats its label into the border and has no slot there — and its `trailing`
+ * slot reserves 3rem, which a text pill overruns straight into the value. Rather
+ * than fork the field, the note goes underneath, which is what the rest of this
+ * flow already does. It moves back onto the label row when the shared field is
+ * restyled to the design.
+ */
+function FieldHint({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mt-1.5 pl-1 font-satoshi text-[12px] leading-[150%] text-color-secondary-text">
+      {children}
+    </p>
+  );
+}
+
 function GoogleFacts({ claim }: { claim: Claim }) {
   return (
     <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-[12px] bg-color-background px-4 py-3">

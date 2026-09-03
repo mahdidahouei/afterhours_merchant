@@ -17,21 +17,28 @@ declare global {
 
 const runtime = window.__ENV__ ?? {};
 
+/**
+ * `||`, not `??`, on every runtime value.
+ *
+ * `config.js` ships with empty strings as placeholders and a ConfigMap may
+ * mount a partial one, and an empty string is not nullish — `??` would treat
+ * `""` as a configured value and skip the build-time fallback entirely. That is
+ * exactly how the Mapbox token silently resolved to nothing in development.
+ */
 export const env = {
   apiBaseUrl:
-    runtime.API_BASE_URL ??
-    import.meta.env.VITE_API_BASE_URL ??
+    runtime.API_BASE_URL ||
+    import.meta.env.VITE_API_BASE_URL ||
     "https://dev-api.afthr.com/api/v1/owner",
   /**
    * Mapbox public token for the details map.
    *
-   * A `pk.` token is designed to ship in the client — it is scoped by URL
+   * A `pk.` token is designed to ship in the client — scoped by URL
    * restrictions at Mapbox, not kept secret — so it goes through the same
-   * runtime-config path as the API URL, letting an environment swap it without
-   * a rebuild.
+   * runtime-config path as the API URL and an environment can swap it without
+   * a rebuild. Empty means no map; the step falls back to the address.
    */
-  mapboxToken:
-    runtime.MAPBOX_TOKEN ?? import.meta.env.VITE_MAPBOX_TOKEN ?? "",
+  mapboxToken: runtime.MAPBOX_TOKEN || import.meta.env.VITE_MAPBOX_TOKEN || "",
 
   isDev: import.meta.env.DEV,
   /**
