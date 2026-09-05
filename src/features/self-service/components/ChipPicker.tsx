@@ -32,6 +32,15 @@ const MIN_LIST_HEIGHT = 180;
 /** Room left around the list so it never touches the edge of the window. */
 const VIEWPORT_MARGIN = 16;
 
+/** The breath between the Add button and the list, whichever side it opens. */
+const GAP = 8;
+
+/** The search block's own height, which comes out of the list's budget. */
+const SEARCH_HEIGHT = 69;
+
+/** A list longer than this gets a filter box. */
+const SEARCHABLE_FROM = 8;
+
 /** Where the popover sits, in viewport coordinates. */
 type Anchor = {
   left: number;
@@ -39,6 +48,8 @@ type Anchor = {
   /** One of the two is set; the other is undefined. */
   top?: number;
   bottom?: number;
+  /** Opened upwards, because there was no room below. */
+  isAbove: boolean;
   listMaxHeight: number;
 };
 
@@ -69,7 +80,10 @@ export function ChipPicker({
   const [filter, setFilter] = useState("");
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const chipsRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  const hasSearch = options.length > SEARCHABLE_FROM;
 
   /**
    * Measure the trigger and decide where the list goes.
@@ -77,26 +91,36 @@ export function ChipPicker({
    * Below it by default, above when the gap underneath has run out and there is
    * more room overhead — and in either case the list is capped to what actually
    * fits, so it scrolls rather than running off the window.
+   *
+   * Vertically this measures the chips row, not the whole picker: the row is
+   * what the Add button sits in, so the same `GAP` reads as the same distance
+   * whichever way the list opens. Measuring the container instead put the
+   * flipped-up list above the picker's label, a long way from the button that
+   * opened it. Horizontally it is still the container, so the list lines up with
+   * the column rather than with the button.
    */
   const place = useCallback(() => {
     const element = containerRef.current;
-    if (!element) return;
+    const chips = chipsRef.current;
+    if (!element || !chips) return;
 
-    const rect = element.getBoundingClientRect();
-    const below = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
-    const above = rect.top - VIEWPORT_MARGIN;
+    const box = element.getBoundingClientRect();
+    const trigger = chips.getBoundingClientRect();
+    const below = window.innerHeight - trigger.bottom - GAP - VIEWPORT_MARGIN;
+    const above = trigger.top - GAP - VIEWPORT_MARGIN;
     const goesAbove = below < MIN_LIST_HEIGHT && above > below;
     const room = goesAbove ? above : below;
 
     setAnchor({
-      left: rect.left,
-      width: Math.min(Math.max(rect.width, 240), 340),
-      top: goesAbove ? undefined : rect.bottom + 8,
-      bottom: goesAbove ? window.innerHeight - rect.top + 8 : undefined,
+      left: box.left,
+      width: Math.min(Math.max(box.width, 240), 340),
+      top: goesAbove ? undefined : trigger.bottom + GAP,
+      bottom: goesAbove ? window.innerHeight - trigger.top + GAP : undefined,
+      isAbove: goesAbove,
       // The search box, when there is one, eats into the same budget.
-      listMaxHeight: Math.max(Math.min(room - 8, 240), 120),
+      listMaxHeight: Math.max(Math.min(room - (hasSearch ? SEARCH_HEIGHT : 0), 240), 120),
     });
-  }, []);
+  }, [hasSearch]);
 
   // Measured before paint so the list never shows up in the wrong place first.
   useLayoutEffect(() => {
@@ -163,6 +187,27 @@ export function ChipPicker({
     onChange([...value, option]);
   };
 
+  /*
+   * TextField rather than SearchField: this filters a list already in memory,
+   * so the debounce SearchField adds would be latency for nothing.
+   */
+  const search = (
+    <div
+      className={cn(
+        "border-color-border p-2.5",
+        anchor?.isAbove ? "border-t" : "border-b",
+      )}
+    >
+      <TextField
+        size="responsive"
+        autoFocus
+        value={filter}
+        onChange={(event) => setFilter(event.target.value)}
+        placeholder={`Search ${label.toLowerCase()}`}
+      />
+    </div>
+  );
+
   return (
     <div ref={containerRef} className="relative">
       <div className="flex items-baseline justify-between gap-3">
@@ -176,7 +221,7 @@ export function ChipPicker({
         )}
       </div>
 
-      <div className="mt-2.5 flex flex-wrap gap-2">
+      <div ref={chipsRef} className="mt-2.5 flex flex-wrap gap-2">
         {value.map((item) => (
           <Chip key={item} onRemove={() => onChange(value.filter((v) => v !== item))}>
             {item}
@@ -204,9 +249,9 @@ export function ChipPicker({
           {isOpen && anchor && (
             <motion.div
               ref={panelRef}
-              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              initial={{ opacity: 0, y: anchor.isAbove ? 6 : -6, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -6, scale: 0.98 }}
+              exit={{ opacity: 0, y: anchor.isAbove ? 6 : -6, scale: 0.98 }}
               transition={{ duration: 0.16, ease: "easeOut" }}
               role="dialog"
               aria-label={label}
@@ -219,20 +264,13 @@ export function ChipPicker({
               }}
               className="z-[120] overflow-hidden rounded-[16px] border border-color-border bg-white shadow-[0_12px_40px_rgba(0,0,0,0.12)]"
             >
-              {options.length > 8 && (
-                <div className="border-b border-color-border p-2.5">
-                  {/* TextField rather than SearchField: this filters a list
-                    already in memory, so the debounce SearchField adds would be
-                    latency for nothing. */}
-                  <TextField
-                    size="responsive"
-                    autoFocus
-                    value={filter}
-                    onChange={(event) => setFilter(event.target.value)}
-                    placeholder={`Search ${label.toLowerCase()}`}
-                  />
-                </div>
-              )}
+              {/*
+                The search box hugs whichever edge the Add button is on: top of
+                the panel when the list drops down, bottom when it flips up. It
+                is the thing the owner reaches for first, so it stays next to
+                the button they just pressed rather than a list-height away.
+              */}
+              {hasSearch && !anchor.isAbove && search}
 
               <ul
                 style={{ maxHeight: anchor.listMaxHeight }}
@@ -292,6 +330,8 @@ export function ChipPicker({
                   </li>
                 )}
               </ul>
+
+              {hasSearch && anchor.isAbove && search}
             </motion.div>
           )}
         </AnimatePresence>,
