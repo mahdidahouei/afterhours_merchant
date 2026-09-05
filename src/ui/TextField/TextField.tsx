@@ -15,6 +15,14 @@ export type TextFieldProps = Omit<React.ComponentPropsWithoutRef<"input">, "size
   size?: TextFieldSize;
   /** Doubles as the floating label — the two are never different. */
   placeholder: string;
+  /**
+   * Grey text shown inside an empty field, with the label pinned up above it.
+   *
+   * Only for a field whose label and placeholder genuinely say different things
+   * — "TikTok · optional" over "Not found — add if you have one". Without it the
+   * label *is* the placeholder, which is the normal case and stays the default.
+   */
+  hint?: string;
   /** Leading icon; also shifts the text inset. */
   icon?: React.ReactNode;
   /** Trailing adornment, e.g. a spinner while a search is in flight. */
@@ -26,64 +34,66 @@ export type TextFieldProps = Omit<React.ComponentPropsWithoutRef<"input">, "size
   containerClassName?: string;
 };
 
-export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
-  function TextField(
-    {
-      size = "default",
-      placeholder,
-      icon,
-      trailing,
-      errorMessage,
-      hideErrorMessage,
-      isLoaded = true,
-      className,
-      containerClassName,
-      disabled,
-      ...inputProps
-    },
-    ref,
-  ) {
-    const id = useId();
-    const showError = Boolean(errorMessage) && !hideErrorMessage;
-
-    return (
-      <Skeleton
-        isLoaded={isLoaded}
-        className={cn(size === "responsive" && "w-auto", containerClassName)}
-      >
-        <div
-          className={cn(
-            styles.field,
-            size === "responsive" && styles.responsive,
-            !icon && styles.noIcon,
-            disabled && styles.disabled,
-            containerClassName,
-          )}
-        >
-          <input
-            {...inputProps}
-            ref={ref}
-            id={id}
-            disabled={disabled}
-            placeholder={placeholder}
-            aria-invalid={Boolean(errorMessage) || undefined}
-            className={cn(errorMessage && styles.invalid, className)}
-            style={{ paddingRight: trailing ? "3rem" : "2rem" }}
-          />
-
-          <label htmlFor={id} className={styles.label}>
-            {placeholder}
-          </label>
-
-          {icon && <span className={styles.icon}>{icon}</span>}
-          {trailing && <span className={styles.trailing}>{trailing}</span>}
-        </div>
-
-        {showError && <p className={styles.error}>{errorMessage}</p>}
-      </Skeleton>
-    );
+export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
+  {
+    size = "default",
+    placeholder,
+    hint,
+    icon,
+    trailing,
+    errorMessage,
+    hideErrorMessage,
+    isLoaded = true,
+    className,
+    containerClassName,
+    disabled,
+    ...inputProps
   },
-);
+  ref,
+) {
+  const id = useId();
+  const showError = Boolean(errorMessage) && !hideErrorMessage;
+
+  return (
+    <Skeleton
+      isLoaded={isLoaded}
+      className={cn(size === "responsive" && "w-auto", containerClassName)}
+    >
+      <div
+        className={cn(
+          styles.field,
+          size === "responsive" && styles.responsive,
+          hint && styles.hasHint,
+          !icon && styles.noIcon,
+          disabled && styles.disabled,
+          containerClassName,
+        )}
+      >
+        <input
+          {...inputProps}
+          ref={ref}
+          id={id}
+          disabled={disabled}
+          // The float is driven by `:placeholder-shown`, so the input always
+          // carries one; a hint just makes it the visible text as well.
+          placeholder={hint ?? placeholder}
+          aria-invalid={Boolean(errorMessage) || undefined}
+          className={cn(errorMessage && styles.invalid, className)}
+          style={{ paddingRight: trailing ? "3rem" : "2rem" }}
+        />
+
+        <label htmlFor={id} className={styles.label}>
+          {placeholder}
+        </label>
+
+        {icon && <span className={styles.icon}>{icon}</span>}
+        {trailing && <span className={styles.trailing}>{trailing}</span>}
+      </div>
+
+      {showError && <p className={styles.error}>{errorMessage}</p>}
+    </Skeleton>
+  );
+});
 
 /* ── react-hook-form binding ────────────────────────────────────────────── */
 

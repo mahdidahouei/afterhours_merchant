@@ -1,10 +1,10 @@
 import { useState } from "react";
+import { cn } from "@/lib/cn";
 import { AddChip, Chip } from "@/ui/Chip";
 import { Switch } from "@/ui/Switch";
 import { TextField } from "@/ui/TextField";
 import CallIcon from "@/assets/icons/call.svg?react";
 import SmsIcon from "@/assets/icons/sms.svg?react";
-import GlobeIcon from "@/assets/icons/global.svg?react";
 import type { Profile } from "../../api/types";
 import { trimmed } from "./useProfileDraft";
 
@@ -50,7 +50,13 @@ export function ContactSection({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-3.5 tb:flex-row">
+      {/*
+        Four fields, two by two, exactly as the design draws them: phone and
+        email, then the two handles. Facebook is not among them — the contract
+        still carries it and the draft still round-trips whatever the scan
+        found, but nothing on this screen edits it.
+      */}
+      <div className="grid items-start gap-3.5 tb:grid-cols-2">
         <TextField
           size="responsive"
           placeholder="Phone"
@@ -58,7 +64,6 @@ export function ContactSection({
           inputMode="tel"
           value={phone}
           onChange={(event) => onPhoneChange(event.target.value)}
-          containerClassName="flex-1"
         />
         <TextField
           size="responsive"
@@ -69,40 +74,29 @@ export function ContactSection({
           onChange={(event) => update("email", trimmed(event.target.value))}
           errorMessage={missing.has("email") ? "Add an email" : undefined}
           hideErrorMessage
-          containerClassName="flex-1"
         />
-      </div>
-
-      <fieldset className="grid gap-3.5 tb:grid-cols-2">
-        <legend className="mb-1 font-satoshi text-[13px] font-medium text-color-primary-text">
-          Social
-        </legend>
 
         <HandleField
           label="Instagram"
+          at
           value={draft.social.instagram ?? ""}
           onChange={(value) => updateSocial("instagram", value)}
-        />
-        <HandleField
-          label="Facebook · optional"
-          value={draft.social.facebook ?? ""}
-          onChange={(value) => updateSocial("facebook", value)}
-          placeholder="Not found — add if you have one"
         />
         <HandleField
           label="TikTok · optional"
           value={draft.social.tiktok ?? ""}
           onChange={(value) => updateSocial("tiktok", value)}
-          placeholder="Not found — add if you have one"
+          hint="Not found — add if you have one"
         />
-      </fieldset>
+      </div>
 
-      <div className="rounded-[16px] border border-color-border p-4">
-        <p className="font-satoshi text-[13px] font-medium text-color-primary-text">
-          Where guests can book
-        </p>
+      <div>
+        {/* The design puts the heading and the toggle on one line. */}
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-satoshi text-[10px] font-bold uppercase tracking-[0.08em] text-[color:var(--color-field-focus)]">
+            Where guests can book
+          </p>
 
-        <div className="mt-3">
           <Switch
             checked={draft.reservable}
             onChange={(checked) => update("reservable", checked)}
@@ -110,78 +104,76 @@ export function ContactSection({
           />
         </div>
 
-        {draft.reservable && (
-          <div className="mt-4 flex flex-col gap-4">
+        {/*
+          Dimmed rather than unmounted when reservations are off, which is what
+          the design does — the platforms the scan found stay readable, so
+          turning the toggle back on doesn't look like it lost them.
+        */}
+        <div
+          aria-hidden={!draft.reservable}
+          className={cn(
+            "mt-2 transition-opacity duration-200",
+            !draft.reservable && "pointer-events-none opacity-50",
+          )}
+        >
+          {/*
+            The design keeps the platforms and the way to add one inside a
+            single bordered box, the way a chip input reads elsewhere in the
+            app. Its own is a picker; ours takes free text, because
+            `reservationPlatforms` is free text the scan read off the website.
+          */}
+          <div className="flex flex-wrap items-center gap-2 rounded-[12px] border border-[color:var(--color-field-border)] bg-color-background p-2.5">
+            {draft.reservationPlatforms.map((platform) => (
+              <PlatformChip
+                key={platform}
+                platform={platform}
+                isPrimary={primaryPlatform === platform}
+                onSetPrimary={() =>
+                  onPrimaryPlatformChange(primaryPlatform === platform ? null : platform)
+                }
+                onRemove={() => {
+                  update(
+                    "reservationPlatforms",
+                    draft.reservationPlatforms.filter((p) => p !== platform),
+                  );
+                  if (primaryPlatform === platform) onPrimaryPlatformChange(null);
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="mt-2 flex gap-2">
             <TextField
               size="responsive"
-              placeholder="Booking link"
-              icon={<GlobeIcon />}
-              inputMode="url"
-              value={draft.reservationUrl ?? ""}
-              onChange={(event) => update("reservationUrl", trimmed(event.target.value))}
+              containerClassName="min-w-0 flex-1"
+              value={newPlatform}
+              onChange={(event) => setNewPlatform(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addPlatform();
+                }
+              }}
+              placeholder="Formitable, Guestplan…"
             />
+            <AddChip onClick={addPlatform} label="Add" />
+          </div>
 
-            <div>
-              <span className="font-satoshi text-[13px] font-medium text-color-primary-text">
-                Booking platforms
-              </span>
-
-              <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                {draft.reservationPlatforms.map((platform) => (
-                  <PlatformChip
-                    key={platform}
-                    platform={platform}
-                    isPrimary={primaryPlatform === platform}
-                    onSetPrimary={() =>
-                      onPrimaryPlatformChange(
-                        primaryPlatform === platform ? null : platform,
-                      )
-                    }
-                    onRemove={() => {
-                      update(
-                        "reservationPlatforms",
-                        draft.reservationPlatforms.filter((p) => p !== platform),
-                      );
-                      if (primaryPlatform === platform) onPrimaryPlatformChange(null);
-                    }}
-                  />
-                ))}
-              </div>
-
-              <div className="mt-3 flex gap-2">
-                <TextField
-                  size="responsive"
-                  containerClassName="min-w-0 flex-1"
-                  value={newPlatform}
-                  onChange={(event) => setNewPlatform(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      addPlatform();
-                    }
-                  }}
-                  placeholder="Formitable, Guestplan…"
-                />
-                <AddChip onClick={addPlatform} label="Add" />
-              </div>
-
-              {/*
+          {/*
                 PENDING_API — the contract's reservationPlatforms is a flat list
                 of strings with no notion of a primary. The star is kept because
                 the design has it and the field is expected; it holds local
                 state and is labelled as not yet saved.
               */}
-              {draft.reservationPlatforms.length > 1 && (
-                <p className="mt-2.5 font-satoshi text-[12px] text-color-secondary-text">
-                  Tap the star to flag your primary booking platform.{" "}
-                  <span className="text-color-secondary-text">
-                    Not saved yet — coming with the next API release.
-                  </span>
-                </p>
-              )}
-            </div>
-          </div>
-        )}
+          {draft.reservationPlatforms.length > 1 && (
+            <p className="mt-2.5 font-satoshi text-[12px] text-color-secondary-text">
+              Tap the star to flag your primary booking platform.{" "}
+              <span className="text-color-secondary-text">
+                Not saved yet — coming with the next API release.
+              </span>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -190,26 +182,34 @@ export function ContactSection({
 /** A social handle. The API stores handles without the @, so the @ is decoration. */
 function HandleField({
   label,
+  at,
   value,
   onChange,
-  placeholder,
+  hint,
 }: {
   label: string;
+  /** Show the leading @. The design draws it on Instagram and not on TikTok. */
+  at?: boolean;
   value: string;
   onChange: (value: string) => void;
-  placeholder?: string;
+  hint?: string;
 }) {
   // The shared field, with the @ as its leading icon — the same slot every
   // other form in the app uses for one.
   return (
     <TextField
       size="responsive"
-      placeholder={placeholder ?? label}
-      aria-label={label}
+      placeholder={label}
+      hint={hint}
       icon={
-        <span aria-hidden className="font-satoshi text-[15px] text-color-secondary-text">
-          @
-        </span>
+        at ? (
+          <span
+            aria-hidden
+            className="font-satoshi text-[15px] text-color-secondary-text"
+          >
+            @
+          </span>
+        ) : undefined
       }
       value={value}
       onChange={(event) => onChange(event.target.value.replace(/^@/, ""))}

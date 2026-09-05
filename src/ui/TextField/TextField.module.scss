@@ -117,6 +117,24 @@
     }
   }
 
+  /*
+   * A field whose hint differs from its label: the hint is the visible
+   * placeholder, so the label has nowhere to rest and stays floated.
+   */
+  &.hasHint {
+    input::placeholder {
+      visibility: visible;
+      opacity: 1;
+      color: var(--color-field-border);
+    }
+
+    .label {
+      top: 7px;
+      transform: translateY(0);
+      font-size: 12px;
+    }
+  }
+
   input:not(:placeholder-shown) ~ .label,
   input:focus ~ .label {
     top: 7px;
