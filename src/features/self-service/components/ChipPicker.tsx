@@ -80,7 +80,7 @@ export function ChipPicker({
   const [filter, setFilter] = useState("");
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const chipsRef = useRef<HTMLDivElement>(null);
+  const addRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const hasSearch = options.length > SEARCHABLE_FROM;
@@ -92,20 +92,20 @@ export function ChipPicker({
    * more room overhead — and in either case the list is capped to what actually
    * fits, so it scrolls rather than running off the window.
    *
-   * Vertically this measures the chips row, not the whole picker: the row is
-   * what the Add button sits in, so the same `GAP` reads as the same distance
-   * whichever way the list opens. Measuring the container instead put the
-   * flipped-up list above the picker's label, a long way from the button that
-   * opened it. Horizontally it is still the container, so the list lines up with
-   * the column rather than with the button.
+   * Vertically this measures the Add button itself, so the same `GAP` reads as
+   * the same distance whichever way the list opens. Nothing around it will do:
+   * the container starts at the picker's label, and the chips wrap, so the row's
+   * box is the top of its *first* line while the button is usually on the last.
+   * Horizontally it is still the container, so the list lines up with the column
+   * rather than with the button.
    */
   const place = useCallback(() => {
     const element = containerRef.current;
-    const chips = chipsRef.current;
-    if (!element || !chips) return;
+    const add = addRef.current;
+    if (!element || !add) return;
 
     const box = element.getBoundingClientRect();
-    const trigger = chips.getBoundingClientRect();
+    const trigger = add.getBoundingClientRect();
     const below = window.innerHeight - trigger.bottom - GAP - VIEWPORT_MARGIN;
     const above = trigger.top - GAP - VIEWPORT_MARGIN;
     const goesAbove = below < MIN_LIST_HEIGHT && above > below;
@@ -221,7 +221,7 @@ export function ChipPicker({
         )}
       </div>
 
-      <div ref={chipsRef} className="mt-2.5 flex flex-wrap gap-2">
+      <div className="mt-2.5 flex flex-wrap gap-2">
         {value.map((item) => (
           <Chip key={item} onRemove={() => onChange(value.filter((v) => v !== item))}>
             {item}
@@ -235,7 +235,7 @@ export function ChipPicker({
           The cap is still enforced where it belongs: inside the list, on the
           options that aren't already picked.
         */}
-        <AddChip onClick={() => setIsOpen((open) => !open)} />
+        <AddChip ref={addRef} onClick={() => setIsOpen((open) => !open)} />
       </div>
 
       {value.length === 0 && emptyHint && (

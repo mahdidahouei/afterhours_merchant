@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { cn } from "@/lib/cn";
 
 type Props = {
@@ -44,18 +45,20 @@ export function Chip({ children, onRemove, selected = true, className }: Props) 
   );
 }
 
-/** The dashed "Add" affordance that opens a picker. */
-export function AddChip({
-  onClick,
-  label = "Add",
-  disabled,
-}: {
-  onClick: () => void;
-  label?: string;
-  disabled?: boolean;
-}) {
+/**
+ * The dashed "Add" affordance that opens a picker.
+ *
+ * Forwards its ref because a popover has to position itself against this button
+ * and nothing else: the chips it sits among wrap, so the row's own box is the
+ * top of the *first* line, which can be several lines above.
+ */
+export const AddChip = forwardRef<
+  HTMLButtonElement,
+  { onClick: () => void; label?: string; disabled?: boolean }
+>(function AddChip({ onClick, label = "Add", disabled }, ref) {
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       disabled={disabled}
@@ -70,4 +73,4 @@ export function AddChip({
       {label}
     </button>
   );
-}
+});
