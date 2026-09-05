@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import { cn } from "@/lib/cn";
-import { AddChip, Chip } from "@/ui/Chip";
+import { Select, type SelectOption } from "@/ui/Select";
 import { Switch } from "@/ui/Switch";
 import { TextField } from "@/ui/TextField";
 import CallIcon from "@/assets/icons/call.svg?react";
 import SmsIcon from "@/assets/icons/sms.svg?react";
-import type { Profile } from "../../api/types";
+import { useReservationPlatforms } from "../../api/queries";
+import { platformLabel, type Profile } from "../../api/types";
 import { trimmed } from "./useProfileDraft";
 
 type Props = {
@@ -15,9 +16,6 @@ type Props = {
   onPhoneChange: (value: string) => void;
   update: <K extends keyof Profile>(key: K, value: Profile[K]) => void;
   updateSocial: (key: keyof Profile["social"], value: string) => void;
-  /** PENDING_API — `reservationPlatforms` is a flat list with no primary. */
-  primaryPlatform: string | null;
-  onPrimaryPlatformChange: (value: string | null) => void;
   missing: Set<string>;
 };
 
@@ -35,18 +33,45 @@ export function ContactSection({
   onPhoneChange,
   update,
   updateSocial,
-  primaryPlatform,
-  onPrimaryPlatformChange,
   missing,
 }: Props) {
-  const [newPlatform, setNewPlatform] = useState("");
+  const platforms = useReservationPlatforms();
 
-  const addPlatform = () => {
-    const value = newPlatform.trim();
-    if (!value || draft.reservationPlatforms.includes(value)) return;
-    update("reservationPlatforms", [...draft.reservationPlatforms, value]);
-    setNewPlatform("");
-  };
+  /** The one platform on the profile, if any. The picker is single-select. */
+  const chosen = draft.reservationPlatforms[0] ?? null;
+
+  /**
+   * The platforms to choose from.
+   *
+   * `GET /reservation-platforms` is the only real list the API has, and it is
+   * the three we integrate with. The scan reads names off a website, so a
+   * profile can arrive holding something that is not among them — "OpenTable",
+   * say. Whatever is already there is added to the list rather than dropped, so
+   * opening the picker can never silently erase what the scan found. A proper
+   * catalogue is a backend ask; see docs/specs/2026-09-05-reservation-platform-picker.md.
+   *
+   * Options carry the brand name as their value, not the API's lowercase key,
+   * because that is what this field already holds — free text in brand casing,
+   * "Formitable". Matching is case-insensitive so a scan that wrote
+   * "formitable" resolves to the same row rather than listing it twice.
+   */
+  const options = useMemo<SelectOption[]>(() => {
+    const known = (platforms.data ?? []).map((platform) => {
+      const label = platformLabel(platform.name);
+      return { value: label, label };
+    });
+
+    if (chosen && !known.some((option) => sameName(option.value, chosen))) {
+      return [...known, { value: chosen, label: chosen }];
+    }
+    return known;
+  }, [platforms.data, chosen]);
+
+  /** The stored value as one of the options above, whatever case it arrived in. */
+  const selected = useMemo(
+    () => options.find((option) => sameName(option.value, chosen))?.value ?? null,
+    [options, chosen],
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -106,78 +131,40 @@ export function ContactSection({
 
         {/*
           Dimmed rather than unmounted when reservations are off, which is what
-          the design does — the platforms the scan found stay readable, so
-          turning the toggle back on doesn't look like it lost them.
+          the design does — the platform the scan found stays readable, so
+          turning the toggle back on doesn't look like it lost it.
         */}
         <div
-          aria-hidden={!draft.reservable}
           className={cn(
             "mt-2 transition-opacity duration-200",
             !draft.reservable && "pointer-events-none opacity-50",
           )}
         >
           {/*
-            The design keeps the platforms and the way to add one inside a
-            single bordered box, the way a chip input reads elsewhere in the
-            app. Its own is a picker; ours takes free text, because
-            `reservationPlatforms` is free text the scan read off the website.
+            One platform, chosen from a list — not the chip row this used to be.
+            `ui/Select` already wears the text field's clothes: same height, same
+            border, and a placeholder that floats up into a label once there is
+            a value, so it reads as a field the owner types into rather than a
+            control of its own.
           */}
-          <div className="flex flex-wrap items-center gap-2 rounded-[12px] border border-[color:var(--color-field-border)] bg-color-background p-2.5">
-            {draft.reservationPlatforms.map((platform) => (
-              <PlatformChip
-                key={platform}
-                platform={platform}
-                isPrimary={primaryPlatform === platform}
-                onSetPrimary={() =>
-                  onPrimaryPlatformChange(primaryPlatform === platform ? null : platform)
-                }
-                onRemove={() => {
-                  update(
-                    "reservationPlatforms",
-                    draft.reservationPlatforms.filter((p) => p !== platform),
-                  );
-                  if (primaryPlatform === platform) onPrimaryPlatformChange(null);
-                }}
-              />
-            ))}
-          </div>
-
-          <div className="mt-2 flex gap-2">
-            <TextField
-              size="responsive"
-              containerClassName="min-w-0 flex-1"
-              value={newPlatform}
-              onChange={(event) => setNewPlatform(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addPlatform();
-                }
-              }}
-              placeholder="Formitable, Guestplan…"
-            />
-            <AddChip onClick={addPlatform} label="Add" />
-          </div>
-
-          {/*
-                PENDING_API — the contract's reservationPlatforms is a flat list
-                of strings with no notion of a primary. The star is kept because
-                the design has it and the field is expected; it holds local
-                state and is labelled as not yet saved.
-              */}
-          {draft.reservationPlatforms.length > 1 && (
-            <p className="mt-2.5 font-satoshi text-[12px] text-color-secondary-text">
-              Tap the star to flag your primary booking platform.{" "}
-              <span className="text-color-secondary-text">
-                Not saved yet — coming with the next API release.
-              </span>
-            </p>
-          )}
+          <Select
+            size="field"
+            placeholder="Choose a reservation platform"
+            options={options}
+            value={selected}
+            onChange={(value) => update("reservationPlatforms", [value])}
+            isLoading={platforms.isPending}
+            disabled={!draft.reservable}
+          />
         </div>
       </div>
     </div>
   );
 }
+
+/** Platform names are free text, so two spellings of one brand must still match. */
+const sameName = (a: string, b: string | null) =>
+  b !== null && a.toLowerCase() === b.toLowerCase();
 
 /** A social handle. The API stores handles without the @, so the @ is decoration. */
 function HandleField({
@@ -214,41 +201,5 @@ function HandleField({
       value={value}
       onChange={(event) => onChange(event.target.value.replace(/^@/, ""))}
     />
-  );
-}
-
-function PlatformChip({
-  platform,
-  isPrimary,
-  onSetPrimary,
-  onRemove,
-}: {
-  platform: string;
-  isPrimary: boolean;
-  onSetPrimary: () => void;
-  onRemove: () => void;
-}) {
-  return (
-    <Chip onRemove={onRemove} className={isPrimary ? "ring-1 ring-color-primary/40" : ""}>
-      <button
-        type="button"
-        onClick={onSetPrimary}
-        aria-pressed={isPrimary}
-        aria-label={`Mark ${platform} as primary`}
-        className="-ml-0.5 grid place-content-center"
-      >
-        <svg viewBox="0 0 16 16" className="size-3.5">
-          <path
-            d="M8 1.5l1.9 4 4.4.6-3.2 3 .8 4.4L8 11.4 4.1 13.5l.8-4.4-3.2-3 4.4-.6z"
-            fill={isPrimary ? "currentColor" : "none"}
-            stroke="currentColor"
-            strokeWidth="1.2"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
-      {platform}
-      {isPrimary && <span className="text-[11px] opacity-70">· Primary</span>}
-    </Chip>
   );
 }

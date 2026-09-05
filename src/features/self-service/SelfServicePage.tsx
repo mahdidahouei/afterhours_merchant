@@ -304,10 +304,6 @@ export default function SelfServicePage() {
                   menuFileLanguages: { ...prev.menuFileLanguages, [key]: language },
                 }))
               }
-              primaryPlatform={pendingApi.primaryPlatform}
-              onPrimaryPlatformChange={(value) =>
-                setPendingApi((prev) => ({ ...prev, primaryPlatform: value }))
-              }
             />
           )}
 

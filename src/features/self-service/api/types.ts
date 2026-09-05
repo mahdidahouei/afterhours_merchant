@@ -387,8 +387,6 @@ export type ListingRequestBody = {
 export type PendingApi = {
   /** `ClaimMenuFile` carries title/link/type — no language. */
   menuFileLanguages: Record<string, "NL" | "EN" | "DE" | "FR">;
-  /** `reservationPlatforms` is a flat list of strings — there is no primary. */
-  primaryPlatform: string | null;
 };
 
 /**
@@ -404,5 +402,4 @@ export type PendingApi = {
 
 export const EMPTY_PENDING_API: PendingApi = {
   menuFileLanguages: {},
-  primaryPlatform: null,
 };

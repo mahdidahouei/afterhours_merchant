@@ -22,8 +22,6 @@ type Props = {
   /** PENDING_API state, owned by the page so it survives stage switches. */
   languages: Record<string, Language>;
   onLanguageChange: (key: string, language: Language) => void;
-  primaryPlatform: string | null;
-  onPrimaryPlatformChange: (value: string | null) => void;
 };
 
 const SECTIONS = ["Your story", "Contact & reservations", "Your menus"] as const;
@@ -53,8 +51,6 @@ export function ReviewStage({
   leaveGuard,
   languages,
   onLanguageChange,
-  primaryPlatform,
-  onPrimaryPlatformChange,
 }: Props) {
   const taxonomy = useTaxonomy();
   const saveProfile = useSaveProfile();
@@ -232,8 +228,6 @@ export function ReviewStage({
                 onPhoneChange={setPhone}
                 update={update}
                 updateSocial={updateSocial}
-                primaryPlatform={primaryPlatform}
-                onPrimaryPlatformChange={onPrimaryPlatformChange}
                 missing={missingBySection[1]}
               />
             )}

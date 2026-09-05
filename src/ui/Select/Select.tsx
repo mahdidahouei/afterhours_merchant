@@ -16,10 +16,11 @@ import { SelectSearch } from "./SelectSearch";
 import type { SelectOption } from "./types";
 import styles from "./Select.module.scss";
 
-export type SelectSize = "responsive" | "big" | "square";
+export type SelectSize = "responsive" | "field" | "big" | "square";
 
 const SIZE_CLASS: Record<SelectSize, string> = {
   responsive: styles.responsive,
+  field: styles.field,
   big: styles.big,
   square: styles.square,
 };

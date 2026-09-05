@@ -168,10 +168,19 @@ promised is a white screen. That held for free against the mock, which was
 written alongside these types; against a real server it is an assumption, and
 the boundary is where it costs nothing to stop assuming.
 
-Two controls the design draws still have no field in the contract: menu-file
-language and the primary-platform star. They are marked `PENDING_API` in
-`api/types.ts` and hold local state. Everything else that used to be listed here
-has landed — IG/TikTok are real OAuth, bookings are a real integration.
+One control the design draws still has no field in the contract: menu-file
+language. It is marked `PENDING_API` in `api/types.ts` and holds local state.
+Everything else has landed — IG/TikTok are real OAuth, bookings are a real
+integration, and the primary-platform star went with the chip row.
+
+**"Where guests can book" is a single select, and it is fully online.** The
+switch writes `Profile.reservable`; the choice writes
+`Profile.reservationPlatforms` as one element. Its options come from
+`GET /reservation-platforms`, which is the three we *integrate* with — not the
+same thing as the platforms an owner may *use*, so whatever is already on the
+profile is appended as an option rather than dropped. The backend asks that
+would fix that properly are in
+`docs/specs/2026-09-05-reservation-platform-picker.md`.
 
 **The review screen's three accordions open one at a time, in sequence.** The
 open one collapses, and only when that has finished does the next expand —

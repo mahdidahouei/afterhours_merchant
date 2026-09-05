@@ -1,6 +1,7 @@
 /*
- * Three sizes, because three are used:
+ * Four sizes, because four are used:
  *   responsive — fills its column (city picker, ticket subject on mobile)
+ *   field      — fills its column wearing TextField's clothes exactly
  *   big        — fixed 532px (ticket subject on desktop)
  *   square     — 81px dial-code picker, styled to match the outlined text field
  *
@@ -11,6 +12,25 @@
   --width: auto;
   --details-width: 100%;
   --box-gap: 6px;
+}
+
+/*
+ * A select that has to pass for a text field beside one.
+ *
+ * `square` already borrows the field's metrics for the dial-code picker; this
+ * is the same borrowing at full width. The numbers are TextField's, not new
+ * ones — 48px tall, 12px radius, the field border and its focus colour — so the
+ * two line up in a grid rather than nearly lining up.
+ */
+.field {
+  --width: auto;
+  --details-width: 100%;
+  --box-gap: 6px;
+  --height: 48px;
+  --radius: 12px;
+  --padding: 16px;
+  --border: var(--color-field-border);
+  --border-active: var(--color-field-focus);
 }
 
 .big {
