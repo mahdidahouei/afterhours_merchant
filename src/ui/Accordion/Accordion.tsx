@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/cn";
 
@@ -7,6 +8,13 @@ type Props = {
   title: string;
   isOpen: boolean;
   onToggle: () => void;
+  /**
+   * Fired when the collapse animation has finished and the panel is gone.
+   *
+   * Lets a caller sequence one accordion closing into another opening without
+   * hard-coding this component's duration.
+   */
+  onCollapsed?: () => void;
   /** Ticks the badge and tints the header. */
   isComplete?: boolean;
   /** Draws attention — used when submit reports missing fields in here. */
@@ -25,12 +33,25 @@ export function Accordion({
   title,
   isOpen,
   onToggle,
+  onCollapsed,
   isComplete,
   hasError,
   children,
 }: Props) {
   const headingId = `accordion-${index}-heading`;
   const panelId = `accordion-${index}-panel`;
+
+  /**
+   * Whether the panel is on screen at all — open, or still animating shut.
+   *
+   * The header's own rounding follows this rather than `isOpen`: flipping it the
+   * instant a collapse starts would round the header's bottom corners back over
+   * a panel that is still there, which is precisely the seam this squares off.
+   */
+  const [hasPanel, setHasPanel] = useState(isOpen);
+  useEffect(() => {
+    if (isOpen) setHasPanel(true);
+  }, [isOpen]);
 
   return (
     <section
@@ -51,7 +72,12 @@ export function Accordion({
           aria-controls={panelId}
           className={cn(
             "flex w-full items-center gap-3 px-5 py-4 text-left transition-colors",
-            isOpen ? "bg-color-secondary/40" : "bg-transparent hover:bg-color-secondary/20",
+            // Buttons carry a radius globally, which on an open section left the
+            // tinted header curving away from the square border beside it.
+            "rounded-[18px]",
+            hasPanel
+              ? "rounded-b-none bg-color-secondary/40"
+              : "bg-transparent hover:bg-color-secondary/20",
           )}
         >
           <span
@@ -92,7 +118,13 @@ export function Accordion({
         </button>
       </h3>
 
-      <AnimatePresence initial={false}>
+      <AnimatePresence
+        initial={false}
+        onExitComplete={() => {
+          setHasPanel(false);
+          onCollapsed?.();
+        }}
+      >
         {isOpen && (
           <motion.div
             id={panelId}

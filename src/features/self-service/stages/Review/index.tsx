@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft } from "iconsax-reactjs";
 import { errorMessage, isProblem, ProblemError } from "@/lib/errors";
 import { Accordion } from "@/ui/Accordion";
@@ -51,7 +52,62 @@ export function ReviewStage({
 
   const { draft, update, updateSocial, isDirty } = useProfileDraft(claim);
   const [phone, setPhone] = useState(claim.place.phone ?? "");
+
+  /**
+   * One section at a time, and the first one is already open.
+   *
+   * Opening another is two moves rather than one: the current section collapses,
+   * and only once that animation has finished does the next expand. Doing both
+   * at once slides everything below the fold up and back down again, and the
+   * owner loses their place. `queuedSection` is what's waiting for that.
+   */
   const [openSection, setOpenSection] = useState<number | null>(0);
+  const [queuedSection, setQueuedSection] = useState<number | null>(null);
+
+  /**
+   * The section the primary button acts on.
+   *
+   * It trails `openSection` but never goes back to nothing, so collapsing
+   * everything by hand doesn't leave the button without a target — it still
+   * offers the section after the last one they were reading.
+   */
+  const [focusedSection, setFocusedSection] = useState(0);
+  const isLastSection = focusedSection === SECTIONS.length - 1;
+
+  /** Toggle a section shut, or close whatever is open and queue this one. */
+  const requestSection = (next: number) => {
+    if (openSection === next) {
+      setQueuedSection(null);
+      setOpenSection(null);
+      return;
+    }
+
+    setFocusedSection(next);
+
+    if (openSection === null) {
+      setOpenSection(next);
+      return;
+    }
+
+    setQueuedSection(next);
+    setOpenSection(null);
+  };
+
+  /** The accordion reports its own collapse, so no duration is duplicated here. */
+  const openQueuedSection = () => {
+    if (queuedSection === null) return;
+    setOpenSection(queuedSection);
+    setQueuedSection(null);
+  };
+
+  /** Walk down the sections; only the last one leaves the screen. */
+  const primaryAction = () => {
+    if (isLastSection) {
+      void saveAndContinue();
+      return;
+    }
+    requestSection(focusedSection + 1);
+  };
 
   const phoneChanged = phone.trim() !== (claim.place.phone ?? "");
 
@@ -141,7 +197,8 @@ export function ReviewStage({
             index={index + 1}
             title={title}
             isOpen={openSection === index}
-            onToggle={() => setOpenSection(openSection === index ? null : index)}
+            onToggle={() => requestSection(index)}
+            onCollapsed={openQueuedSection}
             hasError={missingBySection[index].size > 0}
           >
             {index === 0 && (
@@ -224,10 +281,25 @@ export function ReviewStage({
               variant="primary"
               size="responsive"
               isLoading={isSaving}
-              onClick={() => void saveAndContinue()}
+              onClick={primaryAction}
               className="h-[46px] rounded-full px-6 text-[13px] font-medium max-tb:flex-1"
             >
-              Looks good — add photos
+              {/*
+                The label swaps when the last section is reached. `mode="wait"`
+                so the width changes while both are invisible, making it read as
+                a fade rather than a jump.
+              */}
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={isLastSection ? "finish" : "next"}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  {isLastSection ? "Looks good — add photos" : "Looks good"}
+                </motion.span>
+              </AnimatePresence>
             </Button>
           </div>
         </div>
