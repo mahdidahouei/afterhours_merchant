@@ -173,6 +173,15 @@ language and the primary-platform star. They are marked `PENDING_API` in
 `api/types.ts` and hold local state. Everything else that used to be listed here
 has landed — IG/TikTok are real OAuth, bookings are a real integration.
 
+**The review screen's three accordions open one at a time, in sequence.** The
+open one collapses, and only when that has finished does the next expand —
+`Accordion` reports its own collapse through `onCollapsed` so the caller never
+restates the duration. The numbers are the design's, not invented:
+`480ms cubic-bezier(0.3, 0, 0, 1)`, no opacity fade, and a 20ms pause between
+the two (the mock waits 500ms from the start of a 480ms collapse). The primary
+button walks down the sections and only becomes "Looks good — add photos" on the
+last one.
+
 ## Maps
 
 `LocationMap` draws the listing's position on the Afterhours Mapbox style.

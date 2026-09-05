@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft } from "iconsax-reactjs";
 import { errorMessage, isProblem, ProblemError } from "@/lib/errors";
@@ -27,6 +27,16 @@ type Props = {
 };
 
 const SECTIONS = ["Your story", "Contact & reservations", "Your menus"] as const;
+
+/**
+ * The beat between one section finishing its collapse and the next opening.
+ *
+ * The design waits 500ms from the moment the open section is told to close,
+ * against a 480ms collapse — so 20ms of stillness at the end, not none. Sitting
+ * on the collapse's own completion rather than on a duration written down twice,
+ * that 20ms is what's left to wait.
+ */
+const HANDOVER_MS = 20;
 
 /**
  * Read back what the scan found, correct it, and move on to photos.
@@ -94,10 +104,15 @@ export function ReviewStage({
   };
 
   /** The accordion reports its own collapse, so no duration is duplicated here. */
+  const handover = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(handover.current), []);
+
   const openQueuedSection = () => {
     if (queuedSection === null) return;
-    setOpenSection(queuedSection);
-    setQueuedSection(null);
+    handover.current = window.setTimeout(() => {
+      setOpenSection(queuedSection);
+      setQueuedSection(null);
+    }, HANDOVER_MS);
   };
 
   /** Walk down the sections; only the last one leaves the screen. */

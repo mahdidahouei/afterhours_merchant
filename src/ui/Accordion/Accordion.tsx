@@ -3,32 +3,17 @@ import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/cn";
 
 /**
- * The curve the panel opens and shuts on.
+ * The panel's timing, taken from the design.
  *
- * Decelerating rather than symmetrical: it leaves quickly and settles slowly,
- * which is what makes a panel of this height read as being pushed open instead
- * of scaled. An `easeInOut` of the same length feels mechanical because the
- * middle of the travel — where the eye is — moves at a constant speed.
+ * `grid-template-rows 480ms cubic-bezier(0.3, 0, 0, 1)` in the mock — one
+ * transition, so opening and shutting are the same length and the same curve,
+ * and the content does not fade. The mock animates a grid row from `0fr` to
+ * `1fr` with the content always mounted; animating height to `auto` over an
+ * unmounted panel looks identical and keeps a closed section out of the tab
+ * order.
  */
-const PANEL_EASE = [0.32, 0.72, 0, 1] as const;
-
-/**
- * Shutting is a little quicker than opening, and the content fades ahead of the
- * height in both directions.
- *
- * Content that is still fully opaque while the panel is halfway shut looks
- * clipped; fading it first hands the eye to the height instead. On the way in
- * the fade trails slightly, so text arrives into space that already exists.
- */
-const OPEN_TRANSITION = {
-  height: { duration: 0.4, ease: PANEL_EASE },
-  opacity: { duration: 0.26, delay: 0.08, ease: "easeOut" },
-} as const;
-
-const CLOSE_TRANSITION = {
-  height: { duration: 0.32, ease: PANEL_EASE },
-  opacity: { duration: 0.15, ease: "easeIn" },
-} as const;
+const PANEL_DURATION = 0.48;
+const PANEL_EASE = [0.3, 0, 0, 1] as const;
 
 type Props = {
   /** 1-based badge shown in the header. */
@@ -84,7 +69,7 @@ export function Accordion({
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-[18px] border bg-white transition-colors",
+        "overflow-hidden rounded-[18px] border bg-white transition-colors duration-200",
         hasError
           ? "border-color-danger"
           : isOpen
@@ -99,7 +84,7 @@ export function Accordion({
           aria-expanded={isOpen}
           aria-controls={panelId}
           className={cn(
-            "flex w-full items-center gap-3 px-5 py-4 text-left transition-colors duration-300",
+            "flex w-full items-center gap-3 px-5 py-4 text-left transition-colors duration-150",
             // Buttons carry a radius globally, which on an open section left the
             // tinted header curving away from the square border beside it.
             "rounded-[18px]",
@@ -129,7 +114,7 @@ export function Accordion({
           <motion.span
             aria-hidden
             animate={{ rotate: isOpen ? 180 : 0 }}
-            transition={{ duration: isOpen ? 0.4 : 0.32, ease: PANEL_EASE }}
+            transition={{ duration: 0.2 }}
             className="text-color-secondary-text"
           >
             <svg viewBox="0 0 16 16" className="size-4">
@@ -158,10 +143,10 @@ export function Accordion({
             id={panelId}
             role="region"
             aria-labelledby={headingId}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0, transition: CLOSE_TRANSITION }}
-            transition={OPEN_TRANSITION}
+            initial={{ height: 0 }}
+            animate={{ height: "auto" }}
+            exit={{ height: 0 }}
+            transition={{ duration: PANEL_DURATION, ease: PANEL_EASE }}
             className="overflow-hidden"
           >
             <div className="border-t border-color-border px-5 py-5">{children}</div>
