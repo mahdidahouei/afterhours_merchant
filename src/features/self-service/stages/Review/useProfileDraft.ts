@@ -65,12 +65,10 @@ export function useProfileDraft(claim: Claim) {
  */
 export function profileStrength(profile: Profile, photoCount: number): number {
   const checks: boolean[] = [
-    Boolean(profile.tagline?.trim()),
     Boolean(profile.description?.trim()),
     profile.cuisines.length > 0,
     profile.vibes.length > 0,
     profile.perfectFor.length > 0,
-    profile.moments.length > 0,
     Boolean(profile.establishmentType),
     Boolean(profile.email?.trim()),
     Boolean(profile.social.instagram?.trim()),

@@ -22,7 +22,7 @@ type Props = {
  * A row of chosen chips plus an "Add" affordance that opens a checklist.
  *
  * Every taxonomy field on the review screen is one of these — cuisines, vibe,
- * perfect for, moments, establishment type. `single` collapses it to a radio,
+ * perfect for, establishment type. `single` collapses it to a radio,
  * which is what the contract requires for establishment type.
  */
 export function ChipPicker({

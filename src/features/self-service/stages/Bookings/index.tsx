@@ -167,7 +167,6 @@ export function BookingsStage({
 /** Which step the owner has to go back to, in their words. */
 const FIELD_LABELS: Record<string, string> = {
   photos: "a photo",
-  tagline: "your tagline",
   description: "your description",
   cuisines: "your cuisines",
   menus: "a menu",

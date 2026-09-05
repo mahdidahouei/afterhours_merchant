@@ -1,5 +1,4 @@
 import { cn } from "@/lib/cn";
-import { TextField } from "@/ui/TextField";
 import { Textarea } from "@/ui/Textarea";
 import { ChipPicker } from "../../components/ChipPicker";
 import type { Profile, Taxonomy } from "../../api/types";
@@ -12,27 +11,13 @@ type Props = {
   missing: Set<string>;
 };
 
-/** Tagline, description, and the four taxonomy pickers. */
+/** The description and the three taxonomy pickers. */
 export function StorySection({ draft, taxonomy, update, missing }: Props) {
   const description = draft.description ?? "";
   const remaining = PROFILE_LIMITS.description - description.length;
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <TextField
-          size="responsive"
-          placeholder="Tagline"
-          value={draft.tagline ?? ""}
-          maxLength={PROFILE_LIMITS.tagline}
-          onChange={(event) => update("tagline", trimmed(event.target.value))}
-          errorMessage={missing.has("tagline") ? "Add a tagline" : undefined}
-        />
-        <p className="mt-1.5 pl-1 font-satoshi text-[12px] text-color-secondary-text">
-          One line, up to {PROFILE_LIMITS.tagline} characters.
-        </p>
-      </div>
-
       {/* The design splits this in two: the pickers on the left, the type
           and the description on the right. */}
       <div className="grid gap-6 tb:grid-cols-2">
@@ -59,15 +44,6 @@ export function StorySection({ draft, taxonomy, update, missing }: Props) {
             value={draft.perfectFor}
             onChange={(next) => update("perfectFor", next)}
             max={PROFILE_LIMITS.perfectFor}
-          />
-
-          <ChipPicker
-            label="Moments"
-            options={taxonomy?.moments ?? []}
-            value={draft.moments}
-            onChange={(next) => update("moments", next)}
-            max={PROFILE_LIMITS.moments}
-            emptyHint="Brunch, late night, and so on."
           />
         </div>
 

@@ -722,7 +722,6 @@ export const mockOwnerApi: OwnerApi = {
 
     const profile = current.profile;
     const missing: string[] = [];
-    if (!profile?.tagline?.trim()) missing.push("tagline");
     if (!profile?.description?.trim()) missing.push("description");
     if (!profile?.cuisines.length) missing.push("cuisines");
     if (!current.photos.length) missing.push("photos");

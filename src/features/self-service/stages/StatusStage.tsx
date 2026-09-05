@@ -109,7 +109,7 @@ function LiveScreen({ claim, onRestart, onConnectBookings }: Props) {
   const profile = claim.profile;
 
   const summary = [
-    profile?.tagline ? "Your tagline & story" : null,
+    profile?.description ? "Your story" : null,
     profile?.cuisines.length ? "Cuisines, vibe & occasions" : null,
     profile?.email || profile?.social.instagram ? "Contact & social links" : null,
     profile?.menus.length

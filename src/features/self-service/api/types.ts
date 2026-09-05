@@ -98,7 +98,13 @@ export type PlacePatch = Partial<{
 /* ── Profile ────────────────────────────────────────────────────────────── */
 
 export type Profile = {
-  /** max 120 */
+  /**
+   * Retired from the UI — no control edits this, and nothing reads it.
+   *
+   * It stays on the type because `PUT /claim/profile` replaces outright: the
+   * draft carries whatever the scan found straight back, and dropping the field
+   * would make every save null it out server-side. Don't add a control for it.
+   */
   tagline: string | null;
   /** max 600 */
   description: string | null;
@@ -107,7 +113,7 @@ export type Profile = {
   vibes: string[];
   /** max 4 — the UI's "Perfect for" */
   perfectFor: string[];
-  /** max 3 — brunch, late night… */
+  /** Retired from the UI alongside `tagline`, and kept for the same reason. */
   moments: string[];
   /** One value, not a list. */
   establishmentType: string | null;
@@ -139,11 +145,9 @@ export type MenuFile = {
 };
 
 export const PROFILE_LIMITS = {
-  tagline: 120,
   description: 600,
   vibes: 3,
   perfectFor: 4,
-  moments: 3,
 } as const;
 
 /* ── Photos ─────────────────────────────────────────────────────────────── */
