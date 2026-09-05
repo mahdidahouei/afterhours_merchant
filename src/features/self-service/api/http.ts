@@ -23,6 +23,23 @@ import type {
 } from "./types";
 
 /**
+ * Where a menu file is uploaded to.
+ *
+ * **PENDING_API — this route does not exist yet.** The claim surface has
+ * exactly one upload, `POST /claim/photos`, and it attaches to the listing's
+ * gallery. `ClaimMenuFile` is `{title, link, type}` with no field for an
+ * uploaded asset, and the only menu-upload endpoints in the contract sit under
+ * `/restaurants/{restaurantId}/menus`, which needs a restaurant id a claim does
+ * not have until it is approved.
+ *
+ * So a PDF or an image cannot be attached to a menu during the claim. The
+ * picker is built and wired; until this lands it fails and the row says so, and
+ * the `webpage` type is unaffected. Requirements are written up in
+ * `docs/specs/2026-09-05-menu-file-upload.md`.
+ */
+const MENU_FILE_UPLOAD_PATH = "/claim/menus/files";
+
+/**
  * Every endpoint the claim flow uses, exactly as the contract defines them.
  *
  * Public calls use the token-free client; everything under /claim and /session
@@ -51,6 +68,12 @@ export type OwnerApi = {
   buildProfile(options?: { skipScan?: boolean }): Promise<Claim>;
   /** Replaces outright — always send the complete Profile. */
   saveProfile(profile: Profile): Promise<Claim>;
+  /**
+   * Upload one menu file and get back the link to store on it.
+   *
+   * PENDING_API — see `MENU_FILE_UPLOAD_PATH`.
+   */
+  uploadMenuFile(file: File): Promise<{ link: string }>;
   addPhoto(file: File): Promise<Claim>;
   movePhoto(photoId: string, position: number): Promise<Claim>;
   removePhoto(photoId: string): Promise<Claim>;
@@ -143,6 +166,16 @@ export const httpOwnerApi: OwnerApi = {
     return normalizeClaim(data);
   },
 
+  async uploadMenuFile(file) {
+    const form = new FormData();
+    form.append("file", file);
+    const { data } = await ownerClient.post<{ link: string }>(
+      MENU_FILE_UPLOAD_PATH,
+      form,
+    );
+    return data;
+  },
+
   async addPhoto(file) {
     const form = new FormData();
     form.append("file", file);
@@ -168,9 +201,7 @@ export const httpOwnerApi: OwnerApi = {
   },
 
   async disconnectReservation(platformId) {
-    const { data } = await ownerClient.delete<Claim>(
-      `/claim/reservation/${platformId}`,
-    );
+    const { data } = await ownerClient.delete<Claim>(`/claim/reservation/${platformId}`);
     return normalizeClaim(data);
   },
 

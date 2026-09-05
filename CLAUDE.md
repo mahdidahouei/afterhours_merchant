@@ -168,6 +168,16 @@ promised is a white screen. That held for free against the mock, which was
 written alongside these types; against a real server it is an assumption, and
 the boundary is where it costs nothing to stop assuming.
 
+**A menu file's input follows its type.** `webpage` is a URL the owner types;
+`pdf` and `image` are a `ui/FileDrop` — click or drag, validated on type and
+size, uploaded, and the returned link stored on `ClaimMenuFile.link`. The upload
+endpoint **does not exist yet**: the claim surface has only `POST /claim/photos`
+(which attaches to the gallery), and the contract's menu uploads need a
+`restaurantId` a claim hasn't got. `MENU_FILE_UPLOAD_PATH` in `api/http.ts` is
+the route being asked for, `api/mock.ts` implements it, and
+`docs/specs/2026-09-05-menu-file-upload.md` is the write-up. Until it lands a
+pdf/image upload fails in place and says so.
+
 One control the design draws still has no field in the contract: menu-file
 language. It is marked `PENDING_API` in `api/types.ts` and holds local state.
 Everything else has landed — IG/TikTok are real OAuth, bookings are a real

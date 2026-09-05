@@ -1,7 +1,16 @@
+import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { errorMessage } from "@/lib/errors";
 import { Button } from "@/ui/Button";
+import { FileDrop } from "@/ui/FileDrop";
 import { TextField } from "@/ui/TextField";
-import type { Menu, MenuFile, Profile } from "../../api/types";
+import { ownerApi } from "../../api";
+import {
+  MENU_FILE_LIMITS,
+  type Menu,
+  type MenuFile,
+  type Profile,
+} from "../../api/types";
 
 /** The contract's three file types. "webpage", not "link". */
 const FILE_TYPES: { value: MenuFile["type"]; label: string }[] = [
@@ -23,6 +32,11 @@ type Props = {
 };
 
 export function MenusSection({ draft, update, languages, onLanguageChange }: Props) {
+  /** Upload state per file row, keyed the same way the languages are. */
+  const [uploads, setUploads] = useState<
+    Record<string, { busy?: boolean; error?: string }>
+  >({});
+
   const setMenus = (menus: Menu[]) => update("menus", menus);
 
   const patchMenu = (index: number, patch: Partial<Menu>) =>
@@ -34,6 +48,30 @@ export function MenusSection({ draft, update, languages, onLanguageChange }: Pro
         i === fileIndex ? { ...file, ...patch } : file,
       ),
     });
+
+  /**
+   * Upload the chosen file and store the link it comes back with.
+   *
+   * The link is all the contract keeps — `ClaimMenuFile` has no notion of an
+   * upload — so the file itself is never part of the draft. The name is
+   * borrowed as the row's title when it hasn't got one, which is what the owner
+   * would have typed anyway.
+   */
+  const upload = async (menuIndex: number, fileIndex: number, file: File) => {
+    const key = `${menuIndex}:${fileIndex}`;
+    setUploads((prev) => ({ ...prev, [key]: { busy: true } }));
+
+    try {
+      const { link } = await ownerApi.uploadMenuFile(file);
+      patchFile(menuIndex, fileIndex, {
+        link,
+        title: draft.menus[menuIndex].files[fileIndex].title || file.name,
+      });
+      setUploads((prev) => ({ ...prev, [key]: {} }));
+    } catch (error) {
+      setUploads((prev) => ({ ...prev, [key]: { error: errorMessage(error) } }));
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -80,7 +118,9 @@ export function MenusSection({ draft, update, languages, onLanguageChange }: Pro
                       <button
                         key={type.value}
                         type="button"
-                        onClick={() => patchFile(menuIndex, fileIndex, { type: type.value })}
+                        onClick={() =>
+                          patchFile(menuIndex, fileIndex, { type: type.value })
+                        }
                         aria-pressed={file.type === type.value}
                         className={cn(
                           "rounded-full px-3 py-1 font-satoshi text-[12px] font-medium transition-colors",
@@ -130,16 +170,36 @@ export function MenusSection({ draft, update, languages, onLanguageChange }: Pro
                         })
                       }
                     />
-                    <TextField
-                      size="responsive"
-                      containerClassName="min-w-0 flex-1"
-                      inputMode="url"
-                      value={file.link}
-                      placeholder="https://…"
-                      onChange={(event) =>
-                        patchFile(menuIndex, fileIndex, { link: event.target.value })
-                      }
-                    />
+
+                    {/*
+                      A webpage is a link the owner types; a PDF or an image is
+                      a file they hand over. Same field slot, different control.
+                    */}
+                    {file.type === "webpage" ? (
+                      <TextField
+                        size="responsive"
+                        containerClassName="min-w-0 flex-1"
+                        inputMode="url"
+                        value={file.link}
+                        placeholder="https://…"
+                        onChange={(event) =>
+                          patchFile(menuIndex, fileIndex, { link: event.target.value })
+                        }
+                      />
+                    ) : (
+                      <FileDrop
+                        className="min-w-0 flex-1"
+                        what={file.type === "pdf" ? "PDF" : "image"}
+                        accept={MENU_FILE_LIMITS.accept[file.type]}
+                        maxBytes={MENU_FILE_LIMITS.maxBytes}
+                        fileName={file.link ? (file.title ?? nameOf(file.link)) : null}
+                        href={file.link || null}
+                        isUploading={uploads[key]?.busy}
+                        errorMessage={uploads[key]?.error}
+                        onSelect={(chosen) => void upload(menuIndex, fileIndex, chosen)}
+                        onClear={() => patchFile(menuIndex, fileIndex, { link: "" })}
+                      />
+                    )}
                   </div>
 
                   <button
@@ -188,6 +248,16 @@ export function MenusSection({ draft, update, languages, onLanguageChange }: Pro
       )}
     </div>
   );
+}
+
+/** The last path segment of a link, for a file that arrived without a title. */
+function nameOf(link: string): string {
+  try {
+    const path = new URL(link, window.location.origin).pathname;
+    return decodeURIComponent(path.split("/").filter(Boolean).pop() ?? link);
+  } catch {
+    return link;
+  }
 }
 
 export type { Language };

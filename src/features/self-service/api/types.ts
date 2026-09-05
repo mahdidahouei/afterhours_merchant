@@ -163,6 +163,19 @@ export type Photo = {
   url: string;
 };
 
+/**
+ * What the menu file picker accepts, per `ClaimMenuFile.type`.
+ *
+ * `webpage` has no entry: it is a link the owner types, not a file.
+ */
+export const MENU_FILE_LIMITS = {
+  maxBytes: 20 * 1024 * 1024,
+  accept: {
+    pdf: ["application/pdf"],
+    image: ["image/jpeg", "image/png", "image/webp"],
+  },
+} as const;
+
 export const PHOTO_LIMITS = {
   maxBytes: 10 * 1024 * 1024,
   maxCount: 12,

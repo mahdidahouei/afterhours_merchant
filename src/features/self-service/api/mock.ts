@@ -91,20 +91,50 @@ const ALREADY_LISTED = new Set(["pl_gys"]);
 
 const TAXONOMY: Taxonomy = {
   cuisines: [
-    "Greek", "Italian", "Japanese", "French", "Dutch", "Levantine", "Mexican",
-    "Korean", "Vietnamese", "Spanish", "Indian", "Thai", "Turkish", "Peruvian",
+    "Greek",
+    "Italian",
+    "Japanese",
+    "French",
+    "Dutch",
+    "Levantine",
+    "Mexican",
+    "Korean",
+    "Vietnamese",
+    "Spanish",
+    "Indian",
+    "Thai",
+    "Turkish",
+    "Peruvian",
   ],
   vibes: [
-    "Intimate", "Lively", "Candlelit", "Minimal", "Cosy", "Refined", "Loud",
-    "Green", "Industrial",
+    "Intimate",
+    "Lively",
+    "Candlelit",
+    "Minimal",
+    "Cosy",
+    "Refined",
+    "Loud",
+    "Green",
+    "Industrial",
   ],
   perfectFor: [
-    "Date night", "Friends", "Family", "Solo", "Business", "Celebration",
-    "First date", "Long lunch",
+    "Date night",
+    "Friends",
+    "Family",
+    "Solo",
+    "Business",
+    "Celebration",
+    "First date",
+    "Long lunch",
   ],
   moments: ["Breakfast", "Brunch", "Lunch", "Dinner", "Late night", "Drinks"],
   establishmentTypes: [
-    "Restaurant", "Bistro", "Wine bar", "Café", "Bakery", "Hotel dining",
+    "Restaurant",
+    "Bistro",
+    "Wine bar",
+    "Café",
+    "Bakery",
+    "Hotel dining",
     "Tea bar",
   ],
 };
@@ -342,7 +372,7 @@ export async function seedMockClaim(
   const isPast = ["submitted", "approved", "live"].includes(status);
 
   claim.photos =
-    options?.photos ?? isPast
+    (options?.photos ?? isPast)
       ? SEEDED_PHOTOS.map((photo, index) => ({ ...photo, position: index }))
       : [];
 
@@ -463,6 +493,18 @@ export const mockOwnerApi: OwnerApi = {
    * Only the claim-scoped writes below are mocked, because the owner API is the
    * part that isn't live yet.
    */
+  /**
+   * Stands in for the upload the contract has no route for.
+   *
+   * Returns a plausible CDN link after a beat, so the picker, its spinner and
+   * the saved `ClaimMenuFile.link` can all be exercised without a backend.
+   */
+  async uploadMenuFile(file: File) {
+    await wait(1_200);
+    const slug = file.name.replace(/[^a-z0-9.]+/gi, "-").toLowerCase();
+    return { link: `https://cdn.afterhours.dev/menus/${Date.now()}-${slug}` };
+  },
+
   listReservationPlatforms: httpOwnerApi.listReservationPlatforms,
   getReservationGuide: httpOwnerApi.getReservationGuide,
 
@@ -615,7 +657,10 @@ export const mockOwnerApi: OwnerApi = {
   async addPhoto(file) {
     const current = requireClaim("drafted");
     if (current.photos.length >= 12) {
-      return fail("invalid_request", { status: 400, detail: "That's the twelfth photo." });
+      return fail("invalid_request", {
+        status: 400,
+        detail: "That's the twelfth photo.",
+      });
     }
 
     await wait(700);
