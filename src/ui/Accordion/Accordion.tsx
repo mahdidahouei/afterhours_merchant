@@ -2,6 +2,34 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/cn";
 
+/**
+ * The curve the panel opens and shuts on.
+ *
+ * Decelerating rather than symmetrical: it leaves quickly and settles slowly,
+ * which is what makes a panel of this height read as being pushed open instead
+ * of scaled. An `easeInOut` of the same length feels mechanical because the
+ * middle of the travel — where the eye is — moves at a constant speed.
+ */
+const PANEL_EASE = [0.32, 0.72, 0, 1] as const;
+
+/**
+ * Shutting is a little quicker than opening, and the content fades ahead of the
+ * height in both directions.
+ *
+ * Content that is still fully opaque while the panel is halfway shut looks
+ * clipped; fading it first hands the eye to the height instead. On the way in
+ * the fade trails slightly, so text arrives into space that already exists.
+ */
+const OPEN_TRANSITION = {
+  height: { duration: 0.4, ease: PANEL_EASE },
+  opacity: { duration: 0.26, delay: 0.08, ease: "easeOut" },
+} as const;
+
+const CLOSE_TRANSITION = {
+  height: { duration: 0.32, ease: PANEL_EASE },
+  opacity: { duration: 0.15, ease: "easeIn" },
+} as const;
+
 type Props = {
   /** 1-based badge shown in the header. */
   index: number;
@@ -71,7 +99,7 @@ export function Accordion({
           aria-expanded={isOpen}
           aria-controls={panelId}
           className={cn(
-            "flex w-full items-center gap-3 px-5 py-4 text-left transition-colors",
+            "flex w-full items-center gap-3 px-5 py-4 text-left transition-colors duration-300",
             // Buttons carry a radius globally, which on an open section left the
             // tinted header curving away from the square border beside it.
             "rounded-[18px]",
@@ -101,7 +129,7 @@ export function Accordion({
           <motion.span
             aria-hidden
             animate={{ rotate: isOpen ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: isOpen ? 0.4 : 0.32, ease: PANEL_EASE }}
             className="text-color-secondary-text"
           >
             <svg viewBox="0 0 16 16" className="size-4">
@@ -132,8 +160,8 @@ export function Accordion({
             aria-labelledby={headingId}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
+            exit={{ height: 0, opacity: 0, transition: CLOSE_TRANSITION }}
+            transition={OPEN_TRANSITION}
             className="overflow-hidden"
           >
             <div className="border-t border-color-border px-5 py-5">{children}</div>
